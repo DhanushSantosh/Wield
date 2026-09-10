@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use wield_core::args::{visible_args, ArgValue};
+use wield_core::args::{validate_args, visible_args, ArgValue};
 use wield_core::descriptor::*;
 
 fn specs() -> Vec<ArgSpec> {
@@ -53,4 +53,62 @@ fn width_visible_when_resize_true() {
     let specs = specs();
     let visible = visible_args(&specs, &values);
     assert_eq!(visible.len(), 2);
+}
+
+#[test]
+fn fills_defaults_and_drops_hidden() {
+    let mut input = BTreeMap::new();
+    input.insert("resize".into(), ArgValue::Bool(false));
+    input.insert("width".into(), ArgValue::Int(800));
+    let specs = specs();
+    let effective = validate_args(&specs, &input).unwrap();
+    assert_eq!(effective.get("resize"), Some(&ArgValue::Bool(false)));
+    assert!(effective.get("width").is_none());
+}
+
+#[test]
+fn rejects_out_of_range_int() {
+    let mut input = BTreeMap::new();
+    input.insert("resize".into(), ArgValue::Bool(true));
+    input.insert("width".into(), ArgValue::Int(99999));
+    let specs = specs();
+    let errors = validate_args(&specs, &input).unwrap_err();
+    assert_eq!(errors[0].field, "width");
+}
+
+#[test]
+fn rejects_missing_required() {
+    let specs = vec![ArgSpec {
+        name: "input".into(),
+        label: "in".into(),
+        help: None,
+        arg_type: ArgType::File {
+            filters: vec![],
+            multiple: false,
+        },
+        default: None,
+        required: true,
+        when: None,
+    }];
+    let errors = validate_args(&specs, &BTreeMap::new()).unwrap_err();
+    assert_eq!(errors[0].field, "input");
+}
+
+#[test]
+fn rejects_enum_value_not_in_options() {
+    let specs = vec![ArgSpec {
+        name: "format".into(),
+        label: "f".into(),
+        help: None,
+        arg_type: ArgType::Enum {
+            options: vec!["png".into(), "webp".into()],
+        },
+        default: None,
+        required: true,
+        when: None,
+    }];
+    let mut input = BTreeMap::new();
+    input.insert("format".into(), ArgValue::Str("gif".into()));
+    let errors = validate_args(&specs, &input).unwrap_err();
+    assert_eq!(errors[0].field, "format");
 }

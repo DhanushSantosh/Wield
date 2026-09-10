@@ -1,6 +1,34 @@
-//! `wield-core` — descriptor model, executor, and tool registry for Wield.
+//! `wield-core` — the Wield tool descriptor model, argument validation,
+//! argv-template rendering, the `Command`-capability executor, and the tool
+//! registry.
 //!
-//! Stub in plan P1. The descriptor/executor model lands in P2.
+//! Portal and Native execution are stubbed here; they land in P3 and P4.
+
+pub mod args;
+pub mod builder;
+pub mod command;
+pub mod descriptor;
+pub mod error;
+pub mod executor;
+pub mod outcome;
+pub mod registry;
+pub mod template;
+pub mod validate;
+
+pub use args::{validate_args, ArgMap, ArgValue};
+pub use builder::{ArgSpecBuilder, CommandSpecBuilder, DescriptorBuilder};
+pub use command::BinaryResolver;
+pub use descriptor::{
+    ArgSpec, ArgType, ArgValueLiteral, Capability, Category, CommandArg, CommandSpec, Descriptor,
+    FileFilter, NativeId, OutputDir, OutputSpec, ProgressSpec, Requires, SuccessSpec, ToolId,
+    ValueKind, When,
+};
+pub use error::{CoreError, DescriptorError, ValidationError};
+pub use executor::{AvailabilityView, ExecutionRequest, Executor};
+pub use outcome::{Progress, Stage, ToolOutcome};
+pub use registry::{Registry, RegistryError};
+pub use template::{compute_output_path, render_argv, render_output_name, TemplateError};
+pub use validate::validate_descriptor;
 
 /// The `wield-core` crate version, from Cargo.
 pub fn version() -> &'static str {
@@ -9,10 +37,8 @@ pub fn version() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn version_is_non_empty() {
-        assert!(!version().is_empty());
+        assert!(!super::version().is_empty());
     }
 }

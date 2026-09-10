@@ -10,3 +10,11 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+fuzzy-matcher.workspace = true
+libc.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }

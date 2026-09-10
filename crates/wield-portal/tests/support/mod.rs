@@ -2,6 +2,8 @@
 
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
+use std::time::Duration;
+use std::{collections::HashMap, convert::TryFrom};
 
 const PORTAL_PATH: &str = "/org/freedesktop/portal/desktop";
 
@@ -105,6 +107,80 @@ pub async fn serve_fake_portal(connection: &zbus::Connection, ifaces: &[(&str, u
             other => panic!("unsupported fake portal interface: {other}"),
         }
     }
+    connection
+        .request_name("org.freedesktop.portal.Desktop")
+        .await
+        .unwrap();
+}
+
+struct PickColorPortal {
+    canned: (f64, f64, f64),
+    delay: Duration,
+}
+
+#[zbus::interface(name = "org.freedesktop.portal.Screenshot")]
+impl PickColorPortal {
+    #[zbus(property, name = "version")]
+    fn version(&self) -> u32 {
+        2
+    }
+
+    async fn pick_color(
+        &self,
+        _parent_window: &str,
+        options: HashMap<String, zbus::zvariant::OwnedValue>,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
+        let token = options
+            .get("handle_token")
+            .and_then(|value| <&str>::try_from(value).ok())
+            .ok_or_else(|| zbus::fdo::Error::InvalidArgs("missing handle_token".to_owned()))?;
+        let sender = header
+            .sender()
+            .ok_or_else(|| zbus::fdo::Error::Failed("missing sender".to_owned()))?;
+        let sender_component = sender.as_str().trim_start_matches(':').replace('.', "_");
+        let path = zbus::zvariant::OwnedObjectPath::try_from(format!(
+            "/org/freedesktop/portal/desktop/request/{sender_component}/{token}"
+        ))
+        .map_err(|error| zbus::fdo::Error::InvalidArgs(error.to_string()))?;
+
+        let connection = connection.clone();
+        let response_path = path.clone();
+        let canned = self.canned;
+        let delay = self.delay;
+        tokio::spawn(async move {
+            tokio::time::sleep(delay).await;
+            let structure = zbus::zvariant::Structure::from(canned);
+            let color = zbus::zvariant::OwnedValue::try_from(structure).unwrap();
+            let mut results = HashMap::new();
+            results.insert("color".to_owned(), color);
+            connection
+                .emit_signal(
+                    None::<()>,
+                    response_path,
+                    "org.freedesktop.portal.Request",
+                    "Response",
+                    &(0_u32, results),
+                )
+                .await
+                .unwrap();
+        });
+        Ok(path)
+    }
+}
+
+/// Serve a fake Screenshot portal whose PickColor completes asynchronously.
+pub async fn serve_fake_pick_color(
+    connection: &zbus::Connection,
+    canned: (f64, f64, f64),
+    delay: Duration,
+) {
+    connection
+        .object_server()
+        .at(PORTAL_PATH, PickColorPortal { canned, delay })
+        .await
+        .unwrap();
     connection
         .request_name("org.freedesktop.portal.Desktop")
         .await

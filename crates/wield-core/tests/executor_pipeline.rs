@@ -59,11 +59,7 @@ fn convert_descriptor(binary: &str) -> Descriptor {
 #[tokio::test]
 async fn runs_a_command_tool_end_to_end() {
     let dir = tempfile::tempdir().unwrap();
-    support::write_stub_script(
-        dir.path(),
-        "cp-conv",
-        "#!/bin/sh\ncat \"$1\" > \"$2\"\n",
-    );
+    support::write_stub_script(dir.path(), "cp-conv", "#!/bin/sh\ncat \"$1\" > \"$2\"\n");
     let input = dir.path().join("photo.raw");
     std::fs::write(&input, b"PIXELS").unwrap();
 
@@ -98,10 +94,7 @@ async fn missing_binary_is_unavailable() {
     let resolver = BinaryResolver::with_dirs(vec![]);
     let executor = Executor::new(resolver);
     let mut args = BTreeMap::new();
-    args.insert(
-        "input".to_string(),
-        ArgValue::Path("/tmp/x.raw".into()),
-    );
+    args.insert("input".to_string(), ArgValue::Path("/tmp/x.raw".into()));
     let (tx, _rx) = mpsc::channel(16);
     let outcome = executor
         .run(
@@ -142,4 +135,75 @@ async fn portal_capability_is_placeholder_failure() {
             ..
         }
     ));
+}
+
+#[tokio::test]
+async fn built_descriptor_runs_through_registry_and_executor() {
+    use wield_core::{
+        ArgSpecBuilder, ArgType, ArgValue, ArgValueLiteral, BinaryResolver, Category,
+        CommandSpecBuilder, DescriptorBuilder, ExecutionRequest, Executor, OutputDir, OutputSpec,
+        Registry, Requires, ToolOutcome,
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    support::write_stub_script(dir.path(), "passthru", "#!/bin/sh\ncat \"$1\" > \"$2\"\n");
+    let input = dir.path().join("in.data");
+    std::fs::write(&input, b"OK").unwrap();
+
+    let descriptor = DescriptorBuilder::new("data.pass", "Passthrough", Category::Convert)
+        .keyword("copy")
+        .arg(
+            ArgSpecBuilder::new(
+                "input",
+                "Input",
+                ArgType::File {
+                    filters: vec![],
+                    multiple: false,
+                },
+            )
+            .required(true)
+            .build(),
+        )
+        .arg(
+            ArgSpecBuilder::new(
+                "format",
+                "Format",
+                ArgType::Enum {
+                    options: vec!["data".into()],
+                },
+            )
+            .default(ArgValueLiteral::Str("data".into()))
+            .required(true)
+            .build(),
+        )
+        .requires(Requires::Binary("passthru".into()))
+        .output(OutputSpec::File {
+            name: "{input_stem}.{format}".into(),
+            dir: OutputDir::SameAsInput,
+        })
+        .command(
+            CommandSpecBuilder::new("passthru")
+                .arg("{input}")
+                .arg("{output}")
+                .timeout(Duration::from_secs(5)),
+        )
+        .build()
+        .expect("descriptor should be valid");
+
+    let mut registry = Registry::new();
+    registry.register(descriptor.clone()).unwrap();
+    assert_eq!(registry.search("copy").len(), 1);
+
+    let executor = Executor::new(BinaryResolver::with_dirs(vec![dir.path().to_path_buf()]));
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path(input));
+    let (tx, _rx) = mpsc::channel(16);
+    let outcome = executor
+        .run(
+            ExecutionRequest { descriptor, args },
+            tx,
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(outcome, ToolOutcome::File { ref path } if path.ends_with("in.data")));
 }

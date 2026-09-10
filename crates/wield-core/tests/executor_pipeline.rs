@@ -213,10 +213,7 @@ async fn portal_requires_unmet_is_unavailable() {
     let (tx, _rx) = mpsc::channel(16);
     let outcome = executor
         .run(
-            ExecutionRequest {
-                descriptor,
-                args,
-            },
+            ExecutionRequest { descriptor, args },
             tx,
             CancellationToken::new(),
         )
@@ -248,10 +245,7 @@ async fn portal_requires_met_runs_the_adapter() {
     let (tx, _rx) = mpsc::channel(16);
     let outcome = executor
         .run(
-            ExecutionRequest {
-                descriptor,
-                args,
-            },
+            ExecutionRequest { descriptor, args },
             tx,
             CancellationToken::new(),
         )

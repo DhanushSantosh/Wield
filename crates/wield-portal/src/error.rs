@@ -18,7 +18,9 @@ impl std::fmt::Display for PortalError {
         match self {
             Self::Cancelled => formatter.write_str("portal request cancelled"),
             Self::Transport(detail) => write!(formatter, "portal transport failed: {detail}"),
-            Self::BadResponse(detail) => write!(formatter, "portal returned a bad response: {detail}"),
+            Self::BadResponse(detail) => {
+                write!(formatter, "portal returned a bad response: {detail}")
+            }
         }
     }
 }

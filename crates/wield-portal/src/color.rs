@@ -76,7 +76,14 @@ mod tests {
     #[test]
     fn converts_unit_channels_to_hex_rgb_hsl() {
         let color = Rgb::from_unit(0.0, 0.5019608, 1.0);
-        assert_eq!(color, Rgb { r: 0, g: 128, b: 255 });
+        assert_eq!(
+            color,
+            Rgb {
+                r: 0,
+                g: 128,
+                b: 255
+            }
+        );
         assert_eq!(color.hex(), "#0080ff");
         assert_eq!(color.rgb_string(), "rgb(0, 128, 255)");
         assert_eq!(color.hsl_string(), "hsl(210, 100%, 50%)");
@@ -86,13 +93,22 @@ mod tests {
     fn clamps_out_of_range_channels() {
         assert_eq!(
             Rgb::from_unit(-1.0, 2.0, 0.5),
-            Rgb { r: 0, g: 255, b: 128 }
+            Rgb {
+                r: 0,
+                g: 255,
+                b: 128
+            }
         );
     }
 
     #[test]
     fn value_payload_is_json_with_all_three() {
-        let payload = Rgb { r: 255, g: 255, b: 255 }.value_payload();
+        let payload = Rgb {
+            r: 255,
+            g: 255,
+            b: 255,
+        }
+        .value_payload();
         let value: serde_json::Value = serde_json::from_str(&payload).unwrap();
         assert_eq!(value["hex"], "#ffffff");
         assert!(value["rgb"].is_string() && value["hsl"].is_string());

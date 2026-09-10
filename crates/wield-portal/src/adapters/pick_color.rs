@@ -54,7 +54,13 @@ mod tests {
     #[tokio::test]
     async fn maps_a_picked_colour_to_a_value_outcome() {
         let output = pick_color_with(
-            async { Ok(Rgb { r: 10, g: 20, b: 30 }) },
+            async {
+                Ok(Rgb {
+                    r: 10,
+                    g: 20,
+                    b: 30,
+                })
+            },
             CancellationToken::new(),
         )
         .await;
@@ -97,11 +103,8 @@ mod tests {
     async fn cancel_token_wins_over_a_pending_pick() {
         let token = CancellationToken::new();
         token.cancel();
-        let output = pick_color_with(
-            std::future::pending::<Result<Rgb, PortalError>>(),
-            token,
-        )
-        .await;
+        let output =
+            pick_color_with(std::future::pending::<Result<Rgb, PortalError>>(), token).await;
         assert!(matches!(output, ToolOutcome::Cancelled));
     }
 }

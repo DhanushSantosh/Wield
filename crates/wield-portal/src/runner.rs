@@ -10,12 +10,7 @@ pub struct PortalAdapterRunner;
 
 #[async_trait]
 impl PortalRunner for PortalAdapterRunner {
-    async fn run(
-        &self,
-        adapter: &str,
-        args: &ArgMap,
-        cancel: CancellationToken,
-    ) -> ToolOutcome {
+    async fn run(&self, adapter: &str, args: &ArgMap, cancel: CancellationToken) -> ToolOutcome {
         crate::adapters::dispatch(adapter, args, cancel).await
     }
 }

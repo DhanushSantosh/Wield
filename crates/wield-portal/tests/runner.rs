@@ -6,11 +6,7 @@ use wield_portal::PortalAdapterRunner;
 #[tokio::test]
 async fn unknown_adapter_is_failed_portal() {
     let output = PortalAdapterRunner
-        .run(
-            "nope.nope",
-            &BTreeMap::new(),
-            CancellationToken::new(),
-        )
+        .run("nope.nope", &BTreeMap::new(), CancellationToken::new())
         .await;
     assert!(matches!(
         output,

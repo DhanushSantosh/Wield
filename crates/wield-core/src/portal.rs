@@ -9,10 +9,5 @@ use tokio_util::sync::CancellationToken;
 #[async_trait::async_trait]
 pub trait PortalRunner: Send + Sync {
     /// Run the named portal adapter with validated arguments.
-    async fn run(
-        &self,
-        adapter: &str,
-        args: &ArgMap,
-        cancel: CancellationToken,
-    ) -> ToolOutcome;
+    async fn run(&self, adapter: &str, args: &ArgMap, cancel: CancellationToken) -> ToolOutcome;
 }

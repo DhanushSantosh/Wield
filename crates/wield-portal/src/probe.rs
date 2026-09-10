@@ -18,7 +18,9 @@ impl PortalMap {
 
     /// Iterate over short interface names and versions.
     pub fn iter(&self) -> impl Iterator<Item = (&str, u32)> {
-        self.0.iter().map(|(name, version)| (name.as_str(), *version))
+        self.0
+            .iter()
+            .map(|(name, version)| (name.as_str(), *version))
     }
 
     /// Whether no portal interfaces were discovered.
@@ -28,8 +30,10 @@ impl PortalMap {
 
     /// Add these portal versions to an existing availability view.
     pub fn apply_to(&self, view: &mut wield_core::AvailabilityView) {
-        view.portals
-            .extend(self.iter().map(|(name, version)| (name.to_owned(), version)));
+        view.portals.extend(
+            self.iter()
+                .map(|(name, version)| (name.to_owned(), version)),
+        );
     }
 }
 
@@ -75,7 +79,8 @@ pub async fn probe_on(connection: &zbus::Connection) -> PortalMap {
         .map(|short| format!("{PORTAL_PREFIX}{short}"))
         .collect::<Vec<_>>();
     for interface in interfaces {
-        let Ok(proxy) = zbus::Proxy::new(connection, DESTINATION, OBJECT_PATH, interface.as_str()).await
+        let Ok(proxy) =
+            zbus::Proxy::new(connection, DESTINATION, OBJECT_PATH, interface.as_str()).await
         else {
             continue;
         };

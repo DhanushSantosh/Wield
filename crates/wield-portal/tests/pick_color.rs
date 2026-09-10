@@ -10,12 +10,7 @@ async fn pick_color_through_a_fake_portal_yields_a_value() {
         return;
     };
     let server = bus.connect().await;
-    support::serve_fake_pick_color(
-        &server,
-        (0.0, 0.5019608, 1.0),
-        Duration::from_millis(20),
-    )
-    .await;
+    support::serve_fake_pick_color(&server, (0.0, 0.5019608, 1.0), Duration::from_millis(20)).await;
 
     std::env::set_var("DBUS_SESSION_BUS_ADDRESS", bus.address());
     let output = wield_portal::adapters::pick_color::pick_color(

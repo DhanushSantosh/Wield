@@ -12,6 +12,18 @@
 
 ---
 
+## Status: COMPLETE — 2026-09-10 (commit `4671e9a`, pushed to origin/master)
+
+Executed by GEON in-session per the amendment below (clean additive scaffold, no
+per-task commits). Result verified: `cargo build --workspace` ✓, `cargo test
+--workspace` ✓ (3 unit tests), `cargo run -p wield-cli` → `wield 0.1.0` ✓,
+`npm run check` ✓, `cargo fmt --check` ✓, no DeskCrafter strings. The task-by-task
+steps below are retained for reference; the delivered tree is the single first
+commit, not the diff series they describe. Next: P2 (wield-core descriptor +
+executor), plan written just-in-time.
+
+---
+
 ## GEON amendment — 2026-09-10 (owner decisions; overrides conflicting steps below)
 
 The owner resolved the three open items. This amendment is authoritative where it

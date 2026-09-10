@@ -1,7 +1,7 @@
 //! Turn a [`Descriptor`] into a command-line surface: one positional argument
 //! (the first required file/dir), everything else a `--flag`.
 
-use wield_core::{ArgSpec, ArgType, Descriptor};
+use wield_core::{ArgSpec, ArgType, ArgValueLiteral, Descriptor};
 
 /// A `--flag` derived from an [`ArgSpec`].
 pub struct FlagSpec<'a> {
@@ -32,6 +32,15 @@ impl<'a> CliSurface<'a> {
             })
             .collect();
         Self { positional, flags }
+    }
+}
+
+fn literal_display(literal: &ArgValueLiteral) -> String {
+    match literal {
+        ArgValueLiteral::Str(value) => value.clone(),
+        ArgValueLiteral::Int(value) => value.to_string(),
+        ArgValueLiteral::Float(value) => value.to_string(),
+        ArgValueLiteral::Bool(value) => value.to_string(),
     }
 }
 
@@ -96,7 +105,7 @@ pub fn help_text(descriptor: &Descriptor) -> String {
                 .to_string(),
             );
             if let Some(default) = &flag.spec.default {
-                notes.push(format!("default {default:?}"));
+                notes.push(format!("default {}", literal_display(default)));
             }
             if let ArgType::Enum { options } = &flag.spec.arg_type {
                 notes.push(format!("one of: {}", options.join(", ")));

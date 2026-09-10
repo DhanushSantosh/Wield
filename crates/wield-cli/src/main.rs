@@ -1,7 +1,7 @@
-//! `wield` — the Wield command-line surface.
-//!
-//! Stub in plan P1. The registry-generated command surface lands in P4.
+//! `wield` — the Wield command-line entry point.
 
-fn main() {
-    println!("wield {}", wield_core::version());
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
+    let code = wield_cli::run(std::env::args().collect()).await;
+    std::process::exit(code);
 }

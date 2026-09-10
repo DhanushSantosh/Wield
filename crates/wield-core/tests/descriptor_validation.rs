@@ -116,3 +116,33 @@ fn rejects_output_placeholder_in_output_name() {
         .iter()
         .any(|error| error.at.starts_with("output") && error.message.contains("output")));
 }
+
+#[test]
+fn accepts_when_with_empty_in_values() {
+    let mut d = base_command_descriptor();
+    d.args.push(ArgSpec {
+        name: "width".into(),
+        label: "w".into(),
+        help: None,
+        arg_type: ArgType::Int {
+            range: None,
+            step: None,
+        },
+        default: None,
+        required: false,
+        when: None,
+    });
+    d.args.push(ArgSpec {
+        name: "keep_ratio".into(),
+        label: "k".into(),
+        help: None,
+        arg_type: ArgType::Bool,
+        default: None,
+        required: false,
+        when: Some(When {
+            arg: "width".into(),
+            in_values: vec![],
+        }),
+    });
+    assert!(validate_descriptor(&d).is_ok());
+}

@@ -1,16 +1,23 @@
-//! `wield-tools` — built-in tool descriptors and native tool implementations.
+//! `wield-tools` — the built-in Wield tool descriptors.
 //!
-//! Stub in plan P1. The `color.pick` and `image.convert` descriptors land in P4.
+//! Each built-in is a [`wield_core::Descriptor`] constructed with the typed
+//! builders and validated on build. [`builtin_registry`] is the single source
+//! every surface (palette, tray, CLI) reads from.
 
-/// Number of built-in descriptors. Zero until P4.
-pub fn descriptor_count() -> usize {
-    0
-}
+pub mod color_pick;
+pub mod image_convert;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn no_descriptors_yet() {
-        assert_eq!(super::descriptor_count(), 0);
-    }
+use wield_core::Registry;
+
+/// The registry of every built-in tool, validated. Panics only if a built-in
+/// descriptor is malformed — a programming error the snapshot test catches.
+pub fn builtin_registry() -> Registry {
+    let mut registry = Registry::new();
+    registry
+        .register(color_pick::descriptor())
+        .expect("color.pick registers");
+    registry
+        .register(image_convert::descriptor())
+        .expect("image.convert registers");
+    registry
 }

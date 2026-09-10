@@ -83,3 +83,46 @@ fn output_placeholder_without_path_is_an_error() {
     let args: Vec<CommandArg> = vec!["{output}".into()];
     assert!(render_argv(&args, &effective, None).is_err());
 }
+
+#[test]
+fn arg_when_set_drops_paired_option_when_absent() {
+    let gate = |arg: &str| {
+        Some(When {
+            arg: arg.into(),
+            in_values: vec![],
+        })
+    };
+    let args = vec![
+        CommandArg::from("{input}"),
+        CommandArg {
+            template: "-resize".into(),
+            when: gate("width"),
+        },
+        CommandArg {
+            template: "{width}x".into(),
+            when: gate("width"),
+        },
+        CommandArg::from("{output}"),
+    ];
+    let out = PathBuf::from("/x/a.png");
+
+    let absent = map(&[("input", ArgValue::Path("/x/a.png".into()))]);
+    assert_eq!(
+        render_argv(&args, &absent, Some(&out)).unwrap(),
+        vec!["/x/a.png".to_string(), "/x/a.png".to_string()],
+    );
+
+    let present = map(&[
+        ("input", ArgValue::Path("/x/a.png".into())),
+        ("width", ArgValue::Int(640)),
+    ]);
+    assert_eq!(
+        render_argv(&args, &present, Some(&out)).unwrap(),
+        vec![
+            "/x/a.png".to_string(),
+            "-resize".into(),
+            "640x".into(),
+            "/x/a.png".into()
+        ],
+    );
+}

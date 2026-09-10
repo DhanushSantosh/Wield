@@ -1,0 +1,187 @@
+[
+  {
+    "id": "color.pick",
+    "title": "Pick a colour",
+    "keywords": [
+      "colour",
+      "color",
+      "eyedropper",
+      "pixel",
+      "hex",
+      "rgb"
+    ],
+    "category": "Capture",
+    "args": [],
+    "requires": {
+      "Portal": {
+        "iface": "Screenshot",
+        "min_ver": 2
+      }
+    },
+    "output": {
+      "Value": "Color"
+    },
+    "capability": {
+      "Portal": {
+        "adapter": "screenshot.pick_color"
+      }
+    }
+  },
+  {
+    "id": "image.convert",
+    "title": "Convert image",
+    "keywords": [
+      "image",
+      "convert",
+      "resize",
+      "compress",
+      "png",
+      "jpeg",
+      "webp",
+      "format"
+    ],
+    "category": "Convert",
+    "args": [
+      {
+        "name": "input",
+        "label": "Image",
+        "help": null,
+        "arg_type": {
+          "File": {
+            "filters": [
+              {
+                "label": "Images",
+                "extensions": [
+                  "png",
+                  "jpg",
+                  "jpeg",
+                  "webp",
+                  "gif",
+                  "bmp",
+                  "tiff",
+                  "avif"
+                ]
+              }
+            ],
+            "multiple": false
+          }
+        },
+        "default": null,
+        "required": true,
+        "when": null
+      },
+      {
+        "name": "format",
+        "label": "Output format",
+        "help": null,
+        "arg_type": {
+          "Enum": {
+            "options": [
+              "png",
+              "jpg",
+              "webp",
+              "gif",
+              "bmp",
+              "tiff",
+              "avif"
+            ]
+          }
+        },
+        "default": {
+          "Str": "png"
+        },
+        "required": true,
+        "when": null
+      },
+      {
+        "name": "width",
+        "label": "Width (px)",
+        "help": "Resize to this width, keeping aspect ratio. Leave blank to keep the original size.",
+        "arg_type": {
+          "Int": {
+            "range": [
+              1,
+              20000
+            ],
+            "step": 1
+          }
+        },
+        "default": null,
+        "required": false,
+        "when": null
+      },
+      {
+        "name": "quality",
+        "label": "Quality",
+        "help": "Compression quality for lossy formats (JPEG, WebP, AVIF). Leave blank for the format default.",
+        "arg_type": {
+          "Int": {
+            "range": [
+              1,
+              100
+            ],
+            "step": 1
+          }
+        },
+        "default": null,
+        "required": false,
+        "when": null
+      }
+    ],
+    "requires": {
+      "Binary": "magick"
+    },
+    "output": {
+      "File": {
+        "name": "{input_stem}.{format}",
+        "dir": "SameAsInput"
+      }
+    },
+    "capability": {
+      "Command": {
+        "binary": "magick",
+        "args": [
+          {
+            "template": "{input}",
+            "when": null
+          },
+          {
+            "template": "-resize",
+            "when": {
+              "arg": "width",
+              "in": []
+            }
+          },
+          {
+            "template": "{width}x",
+            "when": {
+              "arg": "width",
+              "in": []
+            }
+          },
+          {
+            "template": "-quality",
+            "when": {
+              "arg": "quality",
+              "in": []
+            }
+          },
+          {
+            "template": "{quality}",
+            "when": {
+              "arg": "quality",
+              "in": []
+            }
+          },
+          {
+            "template": "{output}",
+            "when": null
+          }
+        ],
+        "progress": "None",
+        "timeout": 120,
+        "success": "ExitZero"
+      }
+    }
+  }
+]

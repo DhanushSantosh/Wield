@@ -5,6 +5,7 @@
 //! every surface (palette, tray, CLI) reads from.
 
 pub mod color_pick;
+pub mod image_convert;
 
 use wield_core::Registry;
 
@@ -15,5 +16,8 @@ pub fn builtin_registry() -> Registry {
     registry
         .register(color_pick::descriptor())
         .expect("color.pick registers");
+    registry
+        .register(image_convert::descriptor())
+        .expect("image.convert registers");
     registry
 }

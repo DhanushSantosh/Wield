@@ -52,3 +52,23 @@ fn registry_has_exactly_the_expected_builtins() {
         .collect();
     assert_eq!(ids, vec!["color.pick", "image.convert"]);
 }
+
+#[test]
+fn builtin_registry_matches_snapshot() {
+    let actual = builtin_registry().snapshot();
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/snapshots/builtin_registry.json"
+    );
+    if std::env::var("UPDATE_SNAPSHOTS").is_ok() {
+        std::fs::create_dir_all(std::path::Path::new(path).parent().unwrap()).unwrap();
+        std::fs::write(path, &actual).unwrap();
+        return;
+    }
+    let expected = std::fs::read_to_string(path)
+        .expect("run `UPDATE_SNAPSHOTS=1 cargo test -p wield-tools` to create the snapshot");
+    assert_eq!(
+        actual, expected,
+        "built-in registry changed — review the diff, then UPDATE_SNAPSHOTS=1 to accept"
+    );
+}

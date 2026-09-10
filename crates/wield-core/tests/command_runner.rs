@@ -158,3 +158,35 @@ async fn cancels_promptly() {
     .await;
     assert!(matches!(result, CommandResult::Cancelled));
 }
+
+#[tokio::test]
+async fn emits_started_then_finished_for_progress_none() {
+    let dir = tempfile::tempdir().unwrap();
+    let script =
+        support::write_stub_script(dir.path(), "quick", "#!/bin/sh\nexit 0\n");
+    let (tx, mut rx) = mpsc::channel(16);
+    let argv: Vec<String> = vec![];
+    let _result = CommandRunner::execute(RunSpec {
+        binary: &script,
+        argv: &argv,
+        cwd: None,
+        output: None,
+        progress_spec: &ProgressSpec::None,
+        success: &SuccessSpec::ExitZero,
+        timeout: Duration::from_secs(5),
+        progress: tx,
+        cancel: CancellationToken::new(),
+    })
+    .await;
+    let mut seen = vec![];
+    while let Some(progress) = rx.recv().await {
+        seen.push(progress);
+    }
+    assert_eq!(
+        seen,
+        vec![
+            wield_core::outcome::Progress::Started,
+            wield_core::outcome::Progress::Finished,
+        ]
+    );
+}

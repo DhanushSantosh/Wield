@@ -9,7 +9,7 @@ use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -118,11 +118,21 @@ pub struct RunSpec<'a> {
 
 pub struct CommandRunner;
 
+pub(crate) trait ProgressParser {
+    fn parse_line(&mut self, line: &str) -> Option<Progress>;
+}
+
+pub(crate) fn parser_for(
+    spec: &ProgressSpec,
+) -> Option<Box<dyn ProgressParser + Send>> {
+    match spec {
+        ProgressSpec::None => None,
+    }
+}
+
 impl CommandRunner {
     pub async fn execute(spec: RunSpec<'_>) -> CommandResult {
         let _ = spec.progress.try_send(Progress::Started);
-        let _ = spec.progress_spec;
-
         let mut standard = std::process::Command::new(spec.binary);
         standard
             .args(spec.argv)
@@ -151,11 +161,10 @@ impl CommandRunner {
                 stdout.read_to_end(&mut buffer).await.map(|_| buffer)
             })
         });
-        let stderr_task = child.stderr.take().map(|mut stderr| {
-            tokio::spawn(async move {
-                let mut buffer = Vec::new();
-                stderr.read_to_end(&mut buffer).await.map(|_| buffer)
-            })
+        let stderr_parser = parser_for(spec.progress_spec);
+        let stderr_progress = spec.progress.clone();
+        let stderr_task = child.stderr.take().map(|stderr| {
+            tokio::spawn(async move { drain_stderr(stderr, stderr_parser, stderr_progress).await })
         });
 
         let wait_state = tokio::select! {
@@ -205,6 +214,35 @@ impl CommandRunner {
         let _ = spec.progress.try_send(Progress::Finished);
         result
     }
+}
+
+async fn drain_stderr(
+    stderr: tokio::process::ChildStderr,
+    mut parser: Option<Box<dyn ProgressParser + Send>>,
+    progress: mpsc::Sender<Progress>,
+) -> io::Result<Vec<u8>> {
+    let mut reader = BufReader::new(stderr);
+    let mut retained = Vec::new();
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        let read = reader.read_until(b'\n', &mut line).await?;
+        if read == 0 {
+            break;
+        }
+        if let Some(parser) = parser.as_mut() {
+            let text = String::from_utf8_lossy(&line);
+            if let Some(update) = parser.parse_line(text.trim_end_matches(['\r', '\n'])) {
+                let _ = progress.try_send(update);
+            }
+        }
+        retained.extend_from_slice(&line);
+        if retained.len() > 8 * 1024 {
+            let excess = retained.len() - 8 * 1024;
+            retained.drain(..excess);
+        }
+    }
+    Ok(retained)
 }
 
 enum WaitState {

@@ -121,7 +121,7 @@ pub struct CommandRunner;
 impl CommandRunner {
     pub async fn execute(spec: RunSpec<'_>) -> CommandResult {
         let _ = spec.progress.try_send(Progress::Started);
-        let _ = (spec.progress_spec, spec.timeout, &spec.cancel);
+        let _ = spec.progress_spec;
 
         let mut standard = std::process::Command::new(spec.binary);
         standard
@@ -144,6 +144,7 @@ impl CommandRunner {
             }
         };
 
+        let process_group = child.id().and_then(|id| i32::try_from(id).ok());
         let stdout_task = child.stdout.take().map(|mut stdout| {
             tokio::spawn(async move {
                 let mut buffer = Vec::new();
@@ -157,22 +158,42 @@ impl CommandRunner {
             })
         });
 
-        let status = child.wait().await;
+        let wait_state = tokio::select! {
+            status = child.wait() => WaitState::Exited(status),
+            _ = spec.cancel.cancelled() => {
+                terminate(&mut child, process_group).await;
+                WaitState::Cancelled
+            }
+            _ = tokio::time::sleep(spec.timeout) => {
+                terminate(&mut child, process_group).await;
+                WaitState::Timeout
+            }
+        };
         let _stdout = collect_pipe(stdout_task).await.unwrap_or_default();
         let stderr = collect_pipe(stderr_task).await.unwrap_or_default();
         let stderr_tail = retained_tail(&stderr);
 
-        let result = match status {
-            Err(error) => {
+        let result = match wait_state {
+            WaitState::Cancelled => {
+                cleanup_temp(spec.output);
+                CommandResult::Cancelled
+            }
+            WaitState::Timeout => {
+                cleanup_temp(spec.output);
+                CommandResult::Timeout
+            }
+            WaitState::Exited(Err(error)) => {
                 cleanup_temp(spec.output);
                 CommandResult::SpawnFailed {
                     detail: error.to_string(),
                 }
             }
-            Ok(status) if matches!(spec.success, SuccessSpec::ExitZero) && status.success() => {
+            WaitState::Exited(Ok(status))
+                if matches!(spec.success, SuccessSpec::ExitZero) && status.success() =>
+            {
                 finish_output(spec.output)
             }
-            Ok(status) => {
+            WaitState::Exited(Ok(status)) => {
                 cleanup_temp(spec.output);
                 CommandResult::NonZeroExit {
                     code: status.code(),
@@ -184,6 +205,39 @@ impl CommandRunner {
         let _ = spec.progress.try_send(Progress::Finished);
         result
     }
+}
+
+enum WaitState {
+    Exited(io::Result<std::process::ExitStatus>),
+    Timeout,
+    Cancelled,
+}
+
+async fn terminate(child: &mut tokio::process::Child, process_group: Option<i32>) {
+    if let Some(process_group) = process_group {
+        // The child was spawned as its own process-group leader.
+        unsafe {
+            libc::kill(-process_group, libc::SIGTERM);
+        }
+    } else {
+        let _ = child.start_kill();
+    }
+
+    if tokio::time::timeout(Duration::from_secs(3), child.wait())
+        .await
+        .is_ok()
+    {
+        return;
+    }
+
+    if let Some(process_group) = process_group {
+        unsafe {
+            libc::kill(-process_group, libc::SIGKILL);
+        }
+    } else {
+        let _ = child.start_kill();
+    }
+    let _ = child.wait().await;
 }
 
 async fn collect_pipe(

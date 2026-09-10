@@ -103,3 +103,58 @@ async fn nonzero_exit_reports_stderr_tail_and_cleans_temp() {
     }
     assert!(!plan.temp.exists(), "temp must be cleaned on failure");
 }
+
+#[tokio::test]
+async fn kills_on_timeout() {
+    let dir = tempfile::tempdir().unwrap();
+    let script =
+        support::write_stub_script(dir.path(), "slow", "#!/bin/sh\nsleep 30\n");
+    let plan = OutputPlan::for_final(dir.path().join("x.out"));
+    std::fs::write(&plan.temp, b"partial").unwrap();
+    let (tx, _rx) = mpsc::channel(16);
+    let argv: Vec<String> = vec![];
+    let start = std::time::Instant::now();
+    let result = CommandRunner::execute(RunSpec {
+        binary: &script,
+        argv: &argv,
+        cwd: None,
+        output: Some(&plan),
+        progress_spec: &ProgressSpec::None,
+        success: &SuccessSpec::ExitZero,
+        timeout: Duration::from_millis(300),
+        progress: tx,
+        cancel: CancellationToken::new(),
+    })
+    .await;
+    assert!(matches!(result, CommandResult::Timeout));
+    assert!(start.elapsed() < Duration::from_secs(5));
+    assert!(!plan.temp.exists());
+}
+
+#[tokio::test]
+async fn cancels_promptly() {
+    let dir = tempfile::tempdir().unwrap();
+    let script =
+        support::write_stub_script(dir.path(), "slow2", "#!/bin/sh\nsleep 30\n");
+    let (tx, _rx) = mpsc::channel(16);
+    let cancel = CancellationToken::new();
+    let argv: Vec<String> = vec![];
+    let cancellation = cancel.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        cancellation.cancel();
+    });
+    let result = CommandRunner::execute(RunSpec {
+        binary: &script,
+        argv: &argv,
+        cwd: None,
+        output: None,
+        progress_spec: &ProgressSpec::None,
+        success: &SuccessSpec::ExitZero,
+        timeout: Duration::from_secs(30),
+        progress: tx,
+        cancel,
+    })
+    .await;
+    assert!(matches!(result, CommandResult::Cancelled));
+}

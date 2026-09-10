@@ -96,9 +96,12 @@ pub fn render_argv(
     for segment in args {
         if segment.when.as_ref().is_some_and(|when| {
             !effective.get(&when.arg).is_some_and(|value| {
-                when.in_values
-                    .iter()
-                    .any(|literal| value_satisfies_literal(value, literal))
+                // Empty `in_values` is the presence form: satisfied by any value.
+                when.in_values.is_empty()
+                    || when
+                        .in_values
+                        .iter()
+                        .any(|literal| value_satisfies_literal(value, literal))
             })
         }) {
             continue;

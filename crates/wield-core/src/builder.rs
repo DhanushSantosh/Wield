@@ -54,6 +54,15 @@ impl ArgSpecBuilder {
         self
     }
 
+    /// Visible only once `arg` has any value (the presence form of `When`).
+    pub fn when_set(mut self, arg: &str) -> Self {
+        self.spec.when = Some(When {
+            arg: arg.to_owned(),
+            in_values: Vec::new(),
+        });
+        self
+    }
+
     pub fn build(self) -> ArgSpec {
         self.spec
     }
@@ -89,6 +98,19 @@ impl CommandSpecBuilder {
             when: Some(When {
                 arg: arg.to_owned(),
                 in_values,
+            }),
+        });
+        self
+    }
+
+    /// A segment emitted only once `arg` has any value (the presence form).
+    /// Use for paired option flags — give both segments the same `arg`.
+    pub fn arg_when_set(mut self, template: &str, arg: &str) -> Self {
+        self.args.push(CommandArg {
+            template: template.to_owned(),
+            when: Some(When {
+                arg: arg.to_owned(),
+                in_values: Vec::new(),
             }),
         });
         self

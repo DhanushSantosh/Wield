@@ -112,3 +112,37 @@ fn rejects_enum_value_not_in_options() {
     let errors = validate_args(&specs, &input).unwrap_err();
     assert_eq!(errors[0].field, "format");
 }
+
+#[test]
+fn when_set_hides_arg_until_its_dependency_is_present() {
+    let specs = vec![
+        ArgSpec {
+            name: "width".into(),
+            label: "w".into(),
+            help: None,
+            arg_type: ArgType::Int {
+                range: None,
+                step: None,
+            },
+            default: None,
+            required: false,
+            when: None,
+        },
+        ArgSpec {
+            name: "keep_ratio".into(),
+            label: "k".into(),
+            help: None,
+            arg_type: ArgType::Bool,
+            default: None,
+            required: false,
+            when: Some(When {
+                arg: "width".into(),
+                in_values: vec![],
+            }),
+        },
+    ];
+    let mut values = BTreeMap::new();
+    assert_eq!(visible_args(&specs, &values).len(), 1);
+    values.insert("width".into(), ArgValue::Int(800));
+    assert_eq!(visible_args(&specs, &values).len(), 2);
+}

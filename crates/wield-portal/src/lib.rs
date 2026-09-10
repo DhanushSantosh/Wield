@@ -1,16 +1,12 @@
-//! `wield-portal` — XDG Desktop Portal access and startup capability probe.
-//!
-//! Stub in plan P1. The `ashpd` wrapper and capability probe land in P3.
+//! `wield-portal` — the startup capability probe and the XDG Desktop Portal
+//! adapters Wield uses. Implements `wield_core::PortalRunner`.
 
-/// Placeholder for the startup capability probe. Always `true` until P3.
-pub fn probe_stub() -> bool {
-    true
-}
+pub mod adapters;
+pub mod color;
+pub mod error;
+pub mod probe;
+pub mod runner;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn probe_stub_is_true() {
-        assert!(super::probe_stub());
-    }
-}
+pub use error::PortalError;
+pub use probe::{probe, PortalMap};
+pub use runner::PortalAdapterRunner;

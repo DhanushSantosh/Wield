@@ -1,0 +1,20 @@
+{
+  "name": "wield",
+  "private": true,
+  "workspaces": ["apps/wield"],
+  "scripts": {
+    "dev": "npm run dev:app",
+    "dev:app": "npm run dev -w apps/wield",
+    "build:app": "npm run build -w apps/wield",
+    "build:app:ui": "npm run build:ui -w apps/wield",
+    "lint": "npm run lint -w apps/wield",
+    "typecheck": "npm run typecheck -w apps/wield",
+    "test": "npm run test -w apps/wield && node scripts/run-cargo.js test",
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "cargo:test": "node scripts/run-cargo.js test"
+  },
+  "engines": { "node": ">=20.0.0", "npm": ">=10.0.0" },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.2"
+  }
+}

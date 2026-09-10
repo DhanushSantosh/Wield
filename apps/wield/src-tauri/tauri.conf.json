@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Wield",
+  "version": "0.1.0",
+  "identifier": "io.github.DhanushSantosh.Wield",
+  "build": {
+    "beforeDevCommand": "npm run dev:ui -- --host 127.0.0.1 --port 1420",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build:ui",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      { "title": "Wield", "width": 1280, "height": 820, "minWidth": 980, "minHeight": 640 }
+    ],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [],
+    "category": "Utility",
+    "shortDescription": "Portal-native Linux utility hub",
+    "longDescription": "A command palette and tray for quick Linux actions and file conversions."
+  }
+}

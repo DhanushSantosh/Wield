@@ -1,0 +1,20 @@
+[package]
+name = "wield-app"
+version = "0.1.0"
+description = "Wield — a portal-native Linux utility hub"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "wield_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.3", features = [] }
+
+[dependencies]
+wield-core = { path = "../../../crates/wield-core" }
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2.9.5", features = [] }

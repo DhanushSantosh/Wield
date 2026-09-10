@@ -2,4 +2,5 @@
 //! tool registry.
 
 pub mod parse;
+pub mod render;
 pub mod surface;

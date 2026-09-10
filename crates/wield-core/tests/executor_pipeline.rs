@@ -1,6 +1,7 @@
 mod support;
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -9,6 +10,25 @@ use wield_core::command::BinaryResolver;
 use wield_core::descriptor::*;
 use wield_core::executor::{ExecutionRequest, Executor};
 use wield_core::outcome::{Stage, ToolOutcome};
+use wield_core::portal::PortalRunner;
+
+struct StubPortal {
+    outcome: ToolOutcome,
+    seen: std::sync::Mutex<Option<String>>,
+}
+
+#[async_trait::async_trait]
+impl PortalRunner for StubPortal {
+    async fn run(
+        &self,
+        adapter: &str,
+        _args: &wield_core::ArgMap,
+        _cancel: CancellationToken,
+    ) -> ToolOutcome {
+        *self.seen.lock().unwrap() = Some(adapter.to_string());
+        self.outcome.clone()
+    }
+}
 
 fn convert_descriptor(binary: &str) -> Descriptor {
     Descriptor {
@@ -54,6 +74,16 @@ fn convert_descriptor(binary: &str) -> Descriptor {
             success: SuccessSpec::ExitZero,
         }),
     }
+}
+
+fn portal_descriptor(adapter: &str) -> Descriptor {
+    let mut descriptor = convert_descriptor("sh");
+    descriptor.requires = Requires::None;
+    descriptor.output = OutputSpec::Value(ValueKind::Color);
+    descriptor.capability = Capability::Portal {
+        adapter: adapter.into(),
+    };
+    descriptor
 }
 
 #[tokio::test]
@@ -135,6 +165,102 @@ async fn portal_capability_is_placeholder_failure() {
             ..
         }
     ));
+}
+
+#[tokio::test]
+async fn injected_portal_runner_receives_the_adapter_key() {
+    let stub = Arc::new(StubPortal {
+        outcome: ToolOutcome::Value {
+            kind: ValueKind::Color,
+            data: "#abcdef".into(),
+        },
+        seen: std::sync::Mutex::new(None),
+    });
+    let executor = Executor::new(BinaryResolver::from_env()).with_portal(stub.clone());
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path("/tmp/x".into()));
+    let (tx, _rx) = mpsc::channel(16);
+    let outcome = executor
+        .run(
+            ExecutionRequest {
+                descriptor: portal_descriptor("screenshot.pick_color"),
+                args,
+            },
+            tx,
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(outcome, ToolOutcome::Value { .. }));
+    assert_eq!(
+        stub.seen.lock().unwrap().as_deref(),
+        Some("screenshot.pick_color")
+    );
+}
+
+#[tokio::test]
+async fn portal_requires_unmet_is_unavailable() {
+    let mut descriptor = portal_descriptor("screenshot.pick_color");
+    descriptor.requires = Requires::Portal {
+        iface: "Screenshot".into(),
+        min_ver: 2,
+    };
+    let executor = Executor::new(BinaryResolver::from_env()).with_portal(Arc::new(StubPortal {
+        outcome: ToolOutcome::Cancelled,
+        seen: std::sync::Mutex::new(None),
+    }));
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path("/tmp/x".into()));
+    let (tx, _rx) = mpsc::channel(16);
+    let outcome = executor
+        .run(
+            ExecutionRequest {
+                descriptor,
+                args,
+            },
+            tx,
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(outcome, ToolOutcome::Unavailable { .. }));
+}
+
+#[tokio::test]
+async fn portal_requires_met_runs_the_adapter() {
+    let mut descriptor = portal_descriptor("screenshot.pick_color");
+    descriptor.requires = Requires::Portal {
+        iface: "Screenshot".into(),
+        min_ver: 2,
+    };
+    let mut view = wield_core::AvailabilityView::default();
+    view.portals.insert("Screenshot".into(), 2);
+    let stub = Arc::new(StubPortal {
+        outcome: ToolOutcome::Value {
+            kind: ValueKind::Color,
+            data: "#000000".into(),
+        },
+        seen: std::sync::Mutex::new(None),
+    });
+    let executor = Executor::new(BinaryResolver::from_env())
+        .with_portal(stub.clone())
+        .with_availability(view);
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path("/tmp/x".into()));
+    let (tx, _rx) = mpsc::channel(16);
+    let outcome = executor
+        .run(
+            ExecutionRequest {
+                descriptor,
+                args,
+            },
+            tx,
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(outcome, ToolOutcome::Value { .. }));
+    assert_eq!(
+        stub.seen.lock().unwrap().as_deref(),
+        Some("screenshot.pick_color")
+    );
 }
 
 #[tokio::test]

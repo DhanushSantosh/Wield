@@ -2,7 +2,7 @@
 //! argv-template rendering, the `Command`-capability executor, and the tool
 //! registry.
 //!
-//! Portal and Native execution are stubbed here; they land in P3 and P4.
+//! Native execution remains stubbed here; it lands in P4.
 
 pub mod args;
 pub mod builder;
@@ -11,6 +11,7 @@ pub mod descriptor;
 pub mod error;
 pub mod executor;
 pub mod outcome;
+pub mod portal;
 pub mod registry;
 pub mod template;
 pub mod validate;
@@ -26,6 +27,7 @@ pub use descriptor::{
 pub use error::{CoreError, DescriptorError, ValidationError};
 pub use executor::{AvailabilityView, ExecutionRequest, Executor};
 pub use outcome::{Progress, Stage, ToolOutcome};
+pub use portal::PortalRunner;
 pub use registry::{Registry, RegistryError};
 pub use template::{compute_output_path, render_argv, render_output_name, TemplateError};
 pub use validate::validate_descriptor;

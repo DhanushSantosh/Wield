@@ -56,12 +56,14 @@ fn check_arg_types(args: &[ArgSpec], errors: &mut Vec<DescriptorError>) {
                     error(errors, format!("args[{index}].arg_type.step"), "step must be greater than zero");
                 }
             }
-            ArgType::Float { range } => {
-                if let Some([low, high]) = range {
-                    if low > high {
-                        error(errors, format!("args[{index}].arg_type.range"), "range minimum exceeds maximum");
-                    }
-                }
+            ArgType::Float {
+                range: Some([low, high]),
+            } if low > high => {
+                error(
+                    errors,
+                    format!("args[{index}].arg_type.range"),
+                    "range minimum exceeds maximum",
+                );
             }
             ArgType::Enum { options } => {
                 if options.is_empty() {

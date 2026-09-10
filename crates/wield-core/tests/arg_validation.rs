@@ -63,7 +63,7 @@ fn fills_defaults_and_drops_hidden() {
     let specs = specs();
     let effective = validate_args(&specs, &input).unwrap();
     assert_eq!(effective.get("resize"), Some(&ArgValue::Bool(false)));
-    assert!(effective.get("width").is_none());
+    assert!(!effective.contains_key("width"));
 }
 
 #[test]

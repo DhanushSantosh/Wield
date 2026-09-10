@@ -7,6 +7,7 @@ use crate::outcome::{hint_for_stderr, Progress, Stage, ToolOutcome};
 use crate::template::{compute_output_path, render_argv};
 use crate::validate::validate_descriptor;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -40,14 +41,40 @@ pub struct ExecutionRequest {
     pub args: ArgMap,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Executor {
     resolver: BinaryResolver,
+    portal: Option<Arc<dyn crate::portal::PortalRunner>>,
+    availability: AvailabilityView,
+}
+
+impl std::fmt::Debug for Executor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Executor")
+            .field("resolver", &self.resolver)
+            .field("portal", &self.portal.is_some())
+            .field("availability", &self.availability)
+            .finish()
+    }
 }
 
 impl Executor {
     pub fn new(resolver: BinaryResolver) -> Self {
-        Self { resolver }
+        Self {
+            resolver,
+            portal: None,
+            availability: AvailabilityView::default(),
+        }
+    }
+
+    pub fn with_portal(mut self, portal: Arc<dyn crate::portal::PortalRunner>) -> Self {
+        self.portal = Some(portal);
+        self
+    }
+
+    pub fn with_availability(mut self, availability: AvailabilityView) -> Self {
+        self.availability = availability;
+        self
     }
 
     pub async fn run(
@@ -77,12 +104,28 @@ impl Executor {
             Requires::Binary(binary) if self.resolver.resolve(binary).is_none() => {
                 return unavailable_binary(binary);
             }
-            Requires::Portal { .. } => {
-                return ToolOutcome::Unavailable {
-                    reason: "portal capability probing lands in P3".to_owned(),
-                    fix: None,
-                };
-            }
+            Requires::Portal { iface, min_ver } => match self.availability.portals.get(iface) {
+                Some(version) if version >= min_ver => {}
+                Some(version) => {
+                    return ToolOutcome::Unavailable {
+                        reason: format!(
+                            "the {iface} desktop portal is version {version}, but this tool needs version {min_ver}"
+                        ),
+                        fix: Some(format!(
+                            "update your desktop environment to one that provides {iface} portal v{min_ver} or newer"
+                        )),
+                    };
+                }
+                None => {
+                    return ToolOutcome::Unavailable {
+                        reason: format!("the {iface} desktop portal is not available"),
+                        fix: Some(
+                            "this tool needs a desktop environment with XDG Desktop Portal support"
+                                .to_owned(),
+                        ),
+                    };
+                }
+            },
             Requires::None | Requires::Binary(_) => {}
         }
 
@@ -91,10 +134,13 @@ impl Executor {
                 self.run_command(&request.descriptor, command, &effective, progress, cancel)
                     .await
             }
-            Capability::Portal { .. } => ToolOutcome::Failed {
-                stage: Stage::Portal,
-                detail: "portal execution is implemented in P3".to_owned(),
-                hint: None,
+            Capability::Portal { adapter } => match &self.portal {
+                Some(runner) => runner.run(adapter, &effective, cancel).await,
+                None => ToolOutcome::Failed {
+                    stage: Stage::Portal,
+                    detail: "this build has no portal runner configured".to_owned(),
+                    hint: None,
+                },
             },
             Capability::Native { .. } => ToolOutcome::Failed {
                 stage: Stage::Native,

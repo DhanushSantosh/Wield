@@ -10,6 +10,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-10-wield-design.md` — implements §3 (`wield-portal` crate), §4 (`Portal` capability, adapter-by-key), §5 (capability probe), §7 (portal error handling, silent cancel), and the `wield-portal` + portal-path portions of §8.
 
+## Status — complete (2026-09-10)
+
+- Implemented Tasks 1–8 on `feat/p3-portal`; the private-bus PickColor mock is working, so the manual-matrix fallback was not used.
+- Verified `cargo fmt --all`, strict workspace clippy, all workspace tests, ignored real-portal test registration, `npm run check`, and the `wield-cli` smoke test.
+- Mechanical corrections applied: enabled ashpd's feature-gated `screenshot` API; made `probe_on` public so an external integration test can call it; explicitly exposed the XDG lowercase `version` property in the fake service; ran the invalid two-filter Cargo test example as a library test; and retained the generated lockfile feature update.
+
 ---
 
 ## GEON amendment — 2026-09-10 (owner design decisions)
@@ -84,7 +90,7 @@ Additional constraints from GEON:
 **Interfaces:**
 - Produces: a compiling `wield-portal` with empty modules; workspace deps available.
 
-- [ ] **Step 1: Add workspace dependencies**
+- [x] **Step 1: Add workspace dependencies**
 
 Extend root `Cargo.toml` `[workspace.dependencies]`:
 
@@ -97,7 +103,7 @@ zbus_xml = "5"
 
 (`serde_json`, `tokio`, `tokio-util` are already there from P2.)
 
-- [ ] **Step 2: `crates/wield-core/Cargo.toml` — add one dep**
+- [x] **Step 2: `crates/wield-core/Cargo.toml` — add one dep**
 
 Under `[dependencies]` add:
 
@@ -105,7 +111,7 @@ Under `[dependencies]` add:
 async-trait.workspace = true
 ```
 
-- [ ] **Step 3: `crates/wield-portal/Cargo.toml`**
+- [x] **Step 3: `crates/wield-portal/Cargo.toml`**
 
 ```toml
 [package]
@@ -130,7 +136,7 @@ tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util", "process"] }
 ```
 
-- [ ] **Step 4: Replace `crates/wield-portal/src/lib.rs`**
+- [x] **Step 4: Replace `crates/wield-portal/src/lib.rs`**
 
 ```rust
 //! `wield-portal` — the startup capability probe and the XDG Desktop Portal
@@ -147,16 +153,16 @@ pub use probe::{probe, PortalMap};
 pub use runner::PortalAdapterRunner;
 ```
 
-- [ ] **Step 5: Create stub module files**
+- [x] **Step 5: Create stub module files**
 
 `src/error.rs`, `src/probe.rs`, `src/color.rs`, `src/runner.rs`, `src/adapters/mod.rs`, `src/adapters/pick_color.rs` — each just a `//! …` doc line. `src/adapters/mod.rs` also needs `pub mod pick_color;`.
 
-- [ ] **Step 6: Verify it builds**
+- [x] **Step 6: Verify it builds**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo build -p wield-portal`
 Expected: PASS (unused-module warnings are fine).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git checkout -b feat/p3-portal
@@ -260,7 +266,7 @@ git commit -m "chore(portal): add P3 dependencies and wield-portal skeleton"
   ```
 - The existing P2 test `portal_capability_is_placeholder_failure` still passes (it builds an `Executor::new(..)` with no portal → the `None` arm).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `crates/wield-core/tests/executor_pipeline.rs`:
 
@@ -352,19 +358,19 @@ async fn portal_requires_met_runs_the_adapter() {
 
 (Add `async-trait` to `crates/wield-core`'s `[dev-dependencies]` too, or reference it via the dep already added in Task 1 Step 2 — it is a normal dep so `async_trait::async_trait` resolves in tests.)
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-core --test executor_pipeline`
 Expected: FAIL — `portal` module / `with_portal` missing.
 
-- [ ] **Step 3: Implement `src/portal.rs`, the `Executor` changes, and the `lib.rs` export**
+- [x] **Step 3: Implement `src/portal.rs`, the `Executor` changes, and the `lib.rs` export**
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-core`
 Expected: PASS — the 3 new tests plus every P2 test (including `portal_capability_is_placeholder_failure`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/wield-core
@@ -452,7 +458,7 @@ git commit -m "feat(core): PortalRunner trait and executor injection seam"
   ```
 - `parse_portal_versions` uses `zbus_xml::Node::from_reader` (or `from_str`) to get interfaces; the Introspect XML alone gives interface **names** but not `version` values — so `parse_portal_versions` records every `org.freedesktop.portal.*` interface it sees with version `0`, and `probe()` then upgrades each entry by reading the live `version` property. The unit test targets `parse_portal_versions` (names only); the integration test (Task 4) targets `probe()` (real versions).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `crates/wield-portal/tests/probe.rs`:
 
@@ -483,21 +489,21 @@ fn parses_portal_interface_names() {
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-portal --test probe`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `src/error.rs` and `src/probe.rs`**
+- [x] **Step 3: Implement `src/error.rs` and `src/probe.rs`**
 
 For `parse_portal_versions`: parse with `zbus_xml`, keep interface names starting `org.freedesktop.portal.`, strip that prefix, insert `(short, 0)`.
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-portal --test probe`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/wield-portal/src/probe.rs crates/wield-portal/src/error.rs crates/wield-portal/tests/probe.rs
@@ -547,7 +553,7 @@ git commit -m "feat(portal): PortalMap and Introspect-XML parsing"
 - `probe()` gains a `pub(crate) async fn probe_on(conn: &zbus::Connection) -> PortalMap`; `probe()` becomes `probe_on(&session_connection).await`.
 - `serve_fake_portal` registers, at `/org/freedesktop/portal/desktop`, one zbus `#[interface(name = "org.freedesktop.portal.<Short>")]` object per entry, each with a `#[zbus(property)] fn version(&self) -> u32`. Then requests the well-known name `org.freedesktop.portal.Desktop`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `crates/wield-portal/tests/probe.rs`:
 
@@ -572,21 +578,21 @@ async fn probe_reads_versions_from_a_fake_portal() {
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-portal --test probe`
 Expected: FAIL (or skip line printed if `dbus-daemon` missing — but it is installed here).
 
-- [ ] **Step 3: Implement `tests/support/mod.rs` and `probe_on`**
+- [x] **Step 3: Implement `tests/support/mod.rs` and `probe_on`**
 
 `PrivateBus::launch`: `Command::new("dbus-daemon").args(["--session", "--nofork", "--print-address", &format!("--address=unix:path={}", sock)])`, read the printed address, poll until connectable. Kill on drop.
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-portal --test probe`
 Expected: PASS (2 unit + 1 integration).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/wield-portal/tests/support crates/wield-portal/tests/probe.rs crates/wield-portal/src/probe.rs
@@ -657,7 +663,7 @@ git commit -m "test(portal): probe integration against a fake portal service"
   ```
   Fill in `fetch_color_via_ashpd` using `ashpd::desktop::screenshot::Screenshot`. Map `ashpd::Error::Response(ashpd::desktop::ResponseError::Cancelled)` → `PortalError::Cancelled`; other `ashpd::Error` → `PortalError::Transport(e.to_string())`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `src/color.rs`:
 
@@ -731,21 +737,21 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-portal color pick_color`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `color.rs` and the `pick_color_with` core**
+- [x] **Step 3: Implement `color.rs` and the `pick_color_with` core**
 
 Implement `fetch_color_via_ashpd` too, but it is not exercised by unit tests (Task 7 covers it).
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-portal`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/wield-portal/src/color.rs crates/wield-portal/src/adapters/pick_color.rs
@@ -802,7 +808,7 @@ git commit -m "feat(portal): pick_color colour conversion and outcome mapping"
   }
   ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `crates/wield-portal/tests/runner.rs`:
 
@@ -833,19 +839,19 @@ async fn known_adapter_with_immediate_cancel_is_cancelled() {
 
 (The second test relies on `pick_color`'s `tokio::select!` seeing the pre-cancelled token before it ever touches D-Bus — no portal needed.)
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-portal --test runner`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `adapters/mod.rs` and `runner.rs`**
+- [x] **Step 3: Implement `adapters/mod.rs` and `runner.rs`**
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-portal`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/wield-portal/src/adapters/mod.rs crates/wield-portal/src/runner.rs crates/wield-portal/src/lib.rs
@@ -913,21 +919,21 @@ This is acceptable: the spec already mandates a manual portal matrix, and `ashpd
   Note: `pick_color::pick_color` must be `pub` (or add a `pub` test shim) for the test to call it. Adjust `adapters/mod.rs` / `pick_color.rs` visibility as needed and note it.
   `set_var` for `DBUS_SESSION_BUS_ADDRESS` makes this test **not** parallel-safe with other bus tests — put `#[serial_test::serial]` on it, adding `serial_test` as a dev-dep, **or** run this file's tests single-threaded via a `// @test-threads=1` convention and note it. Prefer `serial_test`.
 
-- [ ] **Step 1: Write the failing test** (the non-ignored one above)
+- [x] **Step 1: Write the failing test** (the non-ignored one above)
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-portal --test pick_color`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `serve_fake_pick_color`** (or take the fallback)
+- [x] **Step 3: Implement `serve_fake_pick_color`** (or take the fallback)
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-portal --test pick_color`
 Expected: PASS (the mock test), plus 1 ignored.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/wield-portal/tests
@@ -943,7 +949,7 @@ git commit -m "test(portal): end-to-end pick_color via a fake Screenshot portal"
 **Files:**
 - Modify: this plan file (status block)
 
-- [ ] **Step 1: Full checks**
+- [x] **Step 1: Full checks**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -954,23 +960,23 @@ cargo test -p wield-portal -- --ignored --list   # confirm the real-portal test 
 ```
 Expected: fmt clean, clippy clean, all non-ignored tests pass.
 
-- [ ] **Step 2: `npm run check`**
+- [x] **Step 2: `npm run check`**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && npm run check`
 Expected: PASS.
 
-- [ ] **Step 3: Regression — `wield-cli` still runs**
+- [x] **Step 3: Regression — `wield-cli` still runs**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo run -p wield-cli`
 Expected: prints `wield 0.1.0`.
 
-- [ ] **Step 4: Report to GEON**
+- [x] **Step 4: Report to GEON**
 
 ```
 agent-comms message post --to GEON --kind FYI --subject "P3 complete" --body "wield-portal landed on feat/p3-portal: PortalRunner trait + executor injection in wield-core; zbus-introspection capability probe; screenshot.pick_color adapter (colour math + silent-cancel); PortalAdapterRunner. Probe + adapter + runner tests green; end-to-end PickColor mock <status: done | fell back to manual matrix>. cargo test --workspace + clippy + npm run check green. N commits, branch pushed."
 ```
 
-- [ ] **Step 5: Commit the checked-off plan + push**
+- [x] **Step 5: Commit the checked-off plan + push**
 
 ```bash
 git add docs/superpowers/plans/2026-09-10-wield-m1-p3-portal.md

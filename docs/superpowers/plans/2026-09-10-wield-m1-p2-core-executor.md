@@ -12,6 +12,31 @@
 
 ---
 
+## Status: COMPLETE — 2026-09-10 (branch `feat/p2-core-executor`, 15 commits)
+
+Tasks 1–12 executed by SUNIO; Tasks 13–15 finished by GEON after SUNIO ran out of
+usage. `cargo test --workspace` (50 wield-core tests) + `cargo clippy --workspace
+--all-targets -D warnings` + `cargo fmt --all --check` + `npm run check` all green;
+`wield-cli` still prints `wield 0.1.0`.
+
+**Deviations from the plan as written (all minor, applied per the "mechanical
+corrections" rule):**
+- Task 4/5 tests: bind `specs()` to a local before `visible_args` (E0716 fix).
+- Task 12 `portal_capability_is_placeholder_failure`: also set
+  `descriptor.output = OutputSpec::Value(ValueKind::Color)` when switching the
+  capability to `Portal`, so the `File ⟺ Command` invariant (rule 10) still holds
+  and the pipeline reaches the capability match. (Owner-approved Option A.)
+- Task 13 `search`: split the query into whitespace-separated terms and require
+  every term to fuzzy-match title/keywords — a single-token `fuzzy_match` can't
+  match `"img conv"` against `"image.convert"`.
+- Task 13: two pre-existing clippy lints in Task 3 / Task 5 code fixed in passing.
+- Task 15: widened `kills_on_timeout` bound to 10s and wrapped `cancels_promptly`
+  in a `tokio::time::timeout` guard after one non-reproducible flake under the
+  first cold full-workspace run.
+- `builder.rs`: added `.portal()` / `.native()` (needed by P3/P4 built-ins).
+
+---
+
 ## GEON amendment — 2026-09-10 (owner design decisions)
 
 Locked with the owner before this plan was written:

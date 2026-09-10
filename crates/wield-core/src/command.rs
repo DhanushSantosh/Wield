@@ -122,9 +122,7 @@ pub(crate) trait ProgressParser {
     fn parse_line(&mut self, line: &str) -> Option<Progress>;
 }
 
-pub(crate) fn parser_for(
-    spec: &ProgressSpec,
-) -> Option<Box<dyn ProgressParser + Send>> {
+pub(crate) fn parser_for(spec: &ProgressSpec) -> Option<Box<dyn ProgressParser + Send>> {
     match spec {
         ProgressSpec::None => None,
     }

@@ -39,7 +39,8 @@ fn cmd_tool(id: &str, binary: &str, keywords: &[&str]) -> Descriptor {
 #[test]
 fn rejects_duplicate_ids() {
     let mut r = Registry::new();
-    r.register(cmd_tool("image.convert", "magick", &[])).unwrap();
+    r.register(cmd_tool("image.convert", "magick", &[]))
+        .unwrap();
     let err = r
         .register(cmd_tool("image.convert", "magick", &[]))
         .unwrap_err();
@@ -74,15 +75,21 @@ fn blank_query_returns_all_in_order() {
     let mut r = Registry::new();
     r.register(cmd_tool("b.two", "x", &[])).unwrap();
     r.register(cmd_tool("a.one", "y", &[])).unwrap();
-    let ids: Vec<_> = r.search("  ").iter().map(|d| d.id.as_ref().to_string()).collect();
+    let ids: Vec<_> = r
+        .search("  ")
+        .iter()
+        .map(|d| d.id.as_ref().to_string())
+        .collect();
     assert_eq!(ids, vec!["b.two", "a.one"]);
 }
 
 #[test]
 fn available_filters_on_binaries() {
     let mut r = Registry::new();
-    r.register(cmd_tool("image.convert", "magick", &[])).unwrap();
-    r.register(cmd_tool("video.convert", "ffmpeg", &[])).unwrap();
+    r.register(cmd_tool("image.convert", "magick", &[]))
+        .unwrap();
+    r.register(cmd_tool("video.convert", "ffmpeg", &[]))
+        .unwrap();
     let mut view = AvailabilityView {
         binaries: Default::default(),
         portals: Default::default(),

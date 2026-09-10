@@ -15,10 +15,7 @@ fn map(pairs: &[(&str, ArgValue)]) -> BTreeMap<String, ArgValue> {
 #[test]
 fn substitutes_input_and_output_and_derived() {
     let effective = map(&[
-        (
-            "input",
-            ArgValue::Path(PathBuf::from("/home/a/pic 1.png")),
-        ),
+        ("input", ArgValue::Path(PathBuf::from("/home/a/pic 1.png"))),
         ("format", ArgValue::Str("webp".into())),
     ]);
     let args: Vec<CommandArg> = vec![
@@ -42,10 +39,7 @@ fn substitutes_input_and_output_and_derived() {
 
 #[test]
 fn drops_segment_whose_optional_arg_is_absent() {
-    let effective = map(&[(
-        "input",
-        ArgValue::Path(PathBuf::from("/x/a.png")),
-    )]);
+    let effective = map(&[("input", ArgValue::Path(PathBuf::from("/x/a.png")))]);
     let args: Vec<CommandArg> = vec!["{input}".into(), "-resize".into(), "{width}x".into()];
     let argv = render_argv(&args, &effective, None).unwrap();
     assert_eq!(argv, vec!["/x/a.png".to_string(), "-resize".into()]);
@@ -53,10 +47,7 @@ fn drops_segment_whose_optional_arg_is_absent() {
 
 #[test]
 fn drops_both_paired_segments_via_matching_when() {
-    let effective = map(&[(
-        "input",
-        ArgValue::Path(PathBuf::from("/x/a.png")),
-    )]);
+    let effective = map(&[("input", ArgValue::Path(PathBuf::from("/x/a.png")))]);
     let gate = Some(When {
         arg: "resize".into(),
         in_values: vec![ArgValueLiteral::Bool(true)],
@@ -79,10 +70,7 @@ fn drops_both_paired_segments_via_matching_when() {
 #[test]
 fn render_output_name_uses_stem_and_format() {
     let effective = map(&[
-        (
-            "input",
-            ArgValue::Path(PathBuf::from("/x/holiday.jpeg")),
-        ),
+        ("input", ArgValue::Path(PathBuf::from("/x/holiday.jpeg"))),
         ("format", ArgValue::Str("png".into())),
     ]);
     let name = render_output_name("{input_stem}.{format}", &effective).unwrap();
@@ -91,10 +79,7 @@ fn render_output_name_uses_stem_and_format() {
 
 #[test]
 fn output_placeholder_without_path_is_an_error() {
-    let effective = map(&[(
-        "input",
-        ArgValue::Path(PathBuf::from("/x/a.png")),
-    )]);
+    let effective = map(&[("input", ArgValue::Path(PathBuf::from("/x/a.png")))]);
     let args: Vec<CommandArg> = vec!["{output}".into()];
     assert!(render_argv(&args, &effective, None).is_err());
 }

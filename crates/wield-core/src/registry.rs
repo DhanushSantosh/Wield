@@ -122,9 +122,10 @@ impl Registry {
             .filter(|tool| match &tool.requires {
                 Requires::None => true,
                 Requires::Binary(binary) => view.binaries.contains(binary),
-                Requires::Portal { iface, min_ver } => {
-                    view.portals.get(iface).is_some_and(|version| version >= min_ver)
-                }
+                Requires::Portal { iface, min_ver } => view
+                    .portals
+                    .get(iface)
+                    .is_some_and(|version| version >= min_ver),
             })
             .collect()
     }

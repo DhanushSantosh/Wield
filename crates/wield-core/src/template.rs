@@ -78,7 +78,10 @@ pub fn compute_output_path(
             let Some(ArgValue::Path(input)) = effective.get("input") else {
                 return Err(TemplateError::MissingInputArg);
             };
-            input.parent().unwrap_or_else(|| Path::new("")).to_path_buf()
+            input
+                .parent()
+                .unwrap_or_else(|| Path::new(""))
+                .to_path_buf()
         }
     };
     Ok(Some(directory.join(name)))

@@ -68,12 +68,16 @@ mod tests {
 
     #[test]
     fn maps_known_stderr_to_hint() {
-        assert!(hint_for_stderr("x: Invalid data found when processing input")
-            .unwrap()
-            .contains("corrupt"));
-        assert!(hint_for_stderr("convert: no decode delegate for this image format")
-            .unwrap()
-            .contains("codec"));
+        assert!(
+            hint_for_stderr("x: Invalid data found when processing input")
+                .unwrap()
+                .contains("corrupt")
+        );
+        assert!(
+            hint_for_stderr("convert: no decode delegate for this image format")
+                .unwrap()
+                .contains("codec")
+        );
         assert_eq!(hint_for_stderr("some unrecognised error"), None);
     }
 

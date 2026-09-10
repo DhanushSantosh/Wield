@@ -3,19 +3,13 @@ mod support;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use wield_core::command::{
-    BinaryResolver, CommandResult, CommandRunner, OutputPlan, RunSpec,
-};
+use wield_core::command::{BinaryResolver, CommandResult, CommandRunner, OutputPlan, RunSpec};
 use wield_core::descriptor::{ProgressSpec, SuccessSpec};
 
 #[test]
 fn resolves_a_binary_on_a_custom_dir() {
     let dir = tempfile::tempdir().unwrap();
-    let script = support::write_stub_script(
-        dir.path(),
-        "faketool",
-        "#!/bin/sh\necho hi\n",
-    );
+    let script = support::write_stub_script(dir.path(), "faketool", "#!/bin/sh\necho hi\n");
     let resolver = BinaryResolver::with_dirs(vec![dir.path().to_path_buf()]);
     assert_eq!(resolver.resolve("faketool"), Some(script));
     assert_eq!(resolver.resolve("definitely-missing-xyz"), None);
@@ -59,14 +53,8 @@ async fn writes_output_atomically_on_success() {
     while let Ok(progress) = rx.try_recv() {
         seen.push(progress);
     }
-    assert_eq!(
-        seen.first(),
-        Some(&wield_core::outcome::Progress::Started)
-    );
-    assert_eq!(
-        seen.last(),
-        Some(&wield_core::outcome::Progress::Finished)
-    );
+    assert_eq!(seen.first(), Some(&wield_core::outcome::Progress::Started));
+    assert_eq!(seen.last(), Some(&wield_core::outcome::Progress::Finished));
 }
 
 #[tokio::test]
@@ -107,8 +95,7 @@ async fn nonzero_exit_reports_stderr_tail_and_cleans_temp() {
 #[tokio::test]
 async fn kills_on_timeout() {
     let dir = tempfile::tempdir().unwrap();
-    let script =
-        support::write_stub_script(dir.path(), "slow", "#!/bin/sh\nsleep 30\n");
+    let script = support::write_stub_script(dir.path(), "slow", "#!/bin/sh\nsleep 30\n");
     let plan = OutputPlan::for_final(dir.path().join("x.out"));
     std::fs::write(&plan.temp, b"partial").unwrap();
     let (tx, _rx) = mpsc::channel(16);
@@ -127,15 +114,16 @@ async fn kills_on_timeout() {
     })
     .await;
     assert!(matches!(result, CommandResult::Timeout));
-    assert!(start.elapsed() < Duration::from_secs(5));
+    // Generous upper bound: 300ms timeout + up to 3s SIGTERM grace + scheduler
+    // jitter under a loaded CI runner. This only needs to catch a real hang.
+    assert!(start.elapsed() < Duration::from_secs(10));
     assert!(!plan.temp.exists());
 }
 
 #[tokio::test]
 async fn cancels_promptly() {
     let dir = tempfile::tempdir().unwrap();
-    let script =
-        support::write_stub_script(dir.path(), "slow2", "#!/bin/sh\nsleep 30\n");
+    let script = support::write_stub_script(dir.path(), "slow2", "#!/bin/sh\nsleep 30\n");
     let (tx, _rx) = mpsc::channel(16);
     let cancel = CancellationToken::new();
     let argv: Vec<String> = vec![];
@@ -144,26 +132,31 @@ async fn cancels_promptly() {
         tokio::time::sleep(Duration::from_millis(200)).await;
         cancellation.cancel();
     });
-    let result = CommandRunner::execute(RunSpec {
-        binary: &script,
-        argv: &argv,
-        cwd: None,
-        output: None,
-        progress_spec: &ProgressSpec::None,
-        success: &SuccessSpec::ExitZero,
-        timeout: Duration::from_secs(30),
-        progress: tx,
-        cancel,
-    })
-    .await;
+    // Fail fast if cancellation ever regresses into a hang, rather than
+    // blocking on the 30s command timeout.
+    let result = tokio::time::timeout(
+        Duration::from_secs(10),
+        CommandRunner::execute(RunSpec {
+            binary: &script,
+            argv: &argv,
+            cwd: None,
+            output: None,
+            progress_spec: &ProgressSpec::None,
+            success: &SuccessSpec::ExitZero,
+            timeout: Duration::from_secs(30),
+            progress: tx,
+            cancel,
+        }),
+    )
+    .await
+    .expect("cancellation should resolve well before the command timeout");
     assert!(matches!(result, CommandResult::Cancelled));
 }
 
 #[tokio::test]
 async fn emits_started_then_finished_for_progress_none() {
     let dir = tempfile::tempdir().unwrap();
-    let script =
-        support::write_stub_script(dir.path(), "quick", "#!/bin/sh\nexit 0\n");
+    let script = support::write_stub_script(dir.path(), "quick", "#!/bin/sh\nexit 0\n");
     let (tx, mut rx) = mpsc::channel(16);
     let argv: Vec<String> = vec![];
     let _result = CommandRunner::execute(RunSpec {

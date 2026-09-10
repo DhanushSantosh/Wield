@@ -32,7 +32,11 @@ fn check_arg_names(args: &[ArgSpec], errors: &mut Vec<DescriptorError>) {
     let mut seen = HashSet::new();
     for (index, arg) in args.iter().enumerate() {
         if arg.name.is_empty() {
-            error(errors, format!("args[{index}].name"), "argument name must not be empty");
+            error(
+                errors,
+                format!("args[{index}].name"),
+                "argument name must not be empty",
+            );
         } else if !seen.insert(arg.name.as_str()) {
             error(
                 errors,
@@ -49,11 +53,19 @@ fn check_arg_types(args: &[ArgSpec], errors: &mut Vec<DescriptorError>) {
             ArgType::Int { range, step } => {
                 if let Some([low, high]) = range {
                     if low > high {
-                        error(errors, format!("args[{index}].arg_type.range"), "range minimum exceeds maximum");
+                        error(
+                            errors,
+                            format!("args[{index}].arg_type.range"),
+                            "range minimum exceeds maximum",
+                        );
                     }
                 }
                 if step.is_some_and(|value| value <= 0) {
-                    error(errors, format!("args[{index}].arg_type.step"), "step must be greater than zero");
+                    error(
+                        errors,
+                        format!("args[{index}].arg_type.step"),
+                        "step must be greater than zero",
+                    );
                 }
             }
             ArgType::Float {
@@ -67,11 +79,19 @@ fn check_arg_types(args: &[ArgSpec], errors: &mut Vec<DescriptorError>) {
             }
             ArgType::Enum { options } => {
                 if options.is_empty() {
-                    error(errors, format!("args[{index}].arg_type.options"), "enum options must not be empty");
+                    error(
+                        errors,
+                        format!("args[{index}].arg_type.options"),
+                        "enum options must not be empty",
+                    );
                 }
                 let mut seen = HashSet::new();
                 if options.iter().any(|option| !seen.insert(option)) {
-                    error(errors, format!("args[{index}].arg_type.options"), "enum options contain duplicates");
+                    error(
+                        errors,
+                        format!("args[{index}].arg_type.options"),
+                        "enum options contain duplicates",
+                    );
                 }
             }
             _ => {}
@@ -152,7 +172,11 @@ fn check_command_templates(
     output_name: &str,
     errors: &mut Vec<DescriptorError>,
 ) {
-    let names: HashSet<&str> = descriptor.args.iter().map(|arg| arg.name.as_str()).collect();
+    let names: HashSet<&str> = descriptor
+        .args
+        .iter()
+        .map(|arg| arg.name.as_str())
+        .collect();
     let positions: HashMap<&str, &ArgType> = descriptor
         .args
         .iter()
@@ -214,7 +238,11 @@ fn check_template(
     for token in tokens {
         if token == "output" {
             if !allow_output {
-                error(errors, &at, "output placeholder is not allowed in output name");
+                error(
+                    errors,
+                    &at,
+                    "output placeholder is not allowed in output name",
+                );
             }
             continue;
         }
@@ -222,10 +250,17 @@ fn check_template(
         if matches!(token.as_str(), "input" | "input_stem" | "input_dir") {
             let valid_input = matches!(
                 positions.get("input"),
-                Some(ArgType::File { multiple: false, .. })
+                Some(ArgType::File {
+                    multiple: false,
+                    ..
+                })
             );
             if !valid_input {
-                error(errors, &at, format!("{token} requires a single-file input argument"));
+                error(
+                    errors,
+                    &at,
+                    format!("{token} requires a single-file input argument"),
+                );
             }
             continue;
         }
@@ -254,7 +289,10 @@ fn check_when_values(
             error(
                 errors,
                 &at,
-                format!("conditional value {value:?} is incompatible with {}", when.arg),
+                format!(
+                    "conditional value {value:?} is incompatible with {}",
+                    when.arg
+                ),
             );
         }
     }
@@ -263,8 +301,10 @@ fn check_when_values(
 fn literal_matches_type(value: &ArgValueLiteral, arg_type: &ArgType) -> bool {
     matches!(
         (value, arg_type),
-        (ArgValueLiteral::Str(_), ArgType::Str | ArgType::Text | ArgType::Enum { .. })
-            | (ArgValueLiteral::Int(_), ArgType::Int { .. })
+        (
+            ArgValueLiteral::Str(_),
+            ArgType::Str | ArgType::Text | ArgType::Enum { .. }
+        ) | (ArgValueLiteral::Int(_), ArgType::Int { .. })
             | (ArgValueLiteral::Float(_), ArgType::Float { .. })
             | (ArgValueLiteral::Bool(_), ArgType::Bool)
     )
@@ -273,12 +313,19 @@ fn literal_matches_type(value: &ArgValueLiteral, arg_type: &ArgType) -> bool {
 fn literal_within_constraints(value: &ArgValueLiteral, arg_type: &ArgType) -> bool {
     match (value, arg_type) {
         (ArgValueLiteral::Str(value), ArgType::Enum { options }) => options.contains(value),
-        (ArgValueLiteral::Int(value), ArgType::Int { range: Some([low, high]), .. }) => {
-            value >= low && value <= high
-        }
-        (ArgValueLiteral::Float(value), ArgType::Float { range: Some([low, high]) }) => {
-            value >= low && value <= high
-        }
+        (
+            ArgValueLiteral::Int(value),
+            ArgType::Int {
+                range: Some([low, high]),
+                ..
+            },
+        ) => value >= low && value <= high,
+        (
+            ArgValueLiteral::Float(value),
+            ArgType::Float {
+                range: Some([low, high]),
+            },
+        ) => value >= low && value <= high,
         _ => true,
     }
 }

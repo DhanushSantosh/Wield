@@ -75,10 +75,7 @@ pub fn visible_args<'a>(specs: &'a [ArgSpec], values: &ArgMap) -> Vec<&'a ArgSpe
     visible
 }
 
-pub fn validate_args(
-    specs: &[ArgSpec],
-    input: &ArgMap,
-) -> Result<ArgMap, Vec<ValidationError>> {
+pub fn validate_args(specs: &[ArgSpec], input: &ArgMap) -> Result<ArgMap, Vec<ValidationError>> {
     let visible = visible_args(specs, input);
     let mut effective = ArgMap::new();
     let mut errors = Vec::new();

@@ -21,7 +21,7 @@ repository = "https://github.com/DhanushSantosh/Wield"
 
 [workspace.dependencies]
 async-trait = "0.1"
-ashpd = { version = "0.13", default-features = false, features = ["tokio"] }
+ashpd = { version = "0.13", default-features = false, features = ["tokio", "screenshot"] }
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 zbus_xml = "5"
 serde = { version = "1", features = ["derive"] }

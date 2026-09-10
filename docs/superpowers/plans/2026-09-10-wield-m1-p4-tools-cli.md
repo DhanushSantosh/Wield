@@ -12,6 +12,21 @@
 
 ---
 
+## Status: COMPLETE — 2026-09-10 (branch `feat/p4-tools-cli`, 9 commits)
+
+Executed by GEON. `cargo test --workspace` + `cargo clippy --workspace --all-targets
+-D warnings` + `cargo fmt --all --check` + `npm run check` all green; `wield-cli`
+prints `wield 0.1.0`; `wield image.convert <png> --format webp --width N` produces
+the output file (verified against real `magick`).
+
+**Deviations (all minor):** `wield-cli` got a `[lib]` (`wield_cli`) alongside the
+`wield` bin so `run()` is unit-testable; `help_text` prints `default png` via a
+small `literal_display` helper instead of `{:?}`; the `image.convert` missing-input
+test asserts `!= 0` (executor returns `Failed(Validation)` → code 1) rather than a
+usage code 2, since the parser legitimately accepts an empty positional.
+
+---
+
 ## GEON amendment — 2026-09-10 (owner design decisions)
 
 Locked with the owner before this plan was written:

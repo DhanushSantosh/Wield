@@ -40,3 +40,6 @@ Thumbs.db
 # Tooling caches
 .playwright-mcp/
 .antigravitycli/
+
+# superpowers brainstorming sessions
+.superpowers/

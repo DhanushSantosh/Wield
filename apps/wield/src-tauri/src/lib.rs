@@ -147,7 +147,9 @@ pub fn run() {
             commands::run_tool,
             commands::cancel,
             commands::show_palette,
-            commands::hide_palette
+            commands::hide_palette,
+            commands::hotkey_status,
+            commands::quit
         ])
         .setup(move |app| {
             setup_shell.bind(app.handle().clone());

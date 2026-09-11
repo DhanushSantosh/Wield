@@ -141,6 +141,17 @@ pub fn cancel(state: tauri::State<'_, AppState>, run_id: crate::state::RunId) ->
 }
 
 #[tauri::command]
+pub fn hotkey_status(state: tauri::State<'_, AppState>) -> crate::state::HotkeyState {
+    state.hotkey_state()
+}
+
+#[tauri::command]
+pub fn quit(app: tauri::AppHandle) {
+    tracing::info!("quit requested");
+    app.exit(0);
+}
+
+#[tauri::command]
 pub fn show_palette(app: tauri::AppHandle) {
     crate::palette::show(&app);
 }

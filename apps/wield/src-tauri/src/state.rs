@@ -64,6 +64,20 @@ impl AppState {
             None => false,
         }
     }
+
+    #[cfg(test)]
+    pub(crate) async fn for_test(registry: Registry, resolver: BinaryResolver) -> Self {
+        let availability = AvailabilityView::probe_binaries(&resolver, registry.list());
+        let executor = Executor::new(resolver)
+            .with_portal(Arc::new(wield_portal::PortalAdapterRunner))
+            .with_availability(availability.clone());
+        Self {
+            registry,
+            executor,
+            availability,
+            runs: Mutex::new(HashMap::new()),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -25,7 +25,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app_info,
             commands::capabilities,
-            commands::list_tools
+            commands::list_tools,
+            commands::run_tool
         ])
         .run(tauri::generate_context!())
         .expect("error while running Wield");

@@ -174,7 +174,7 @@ pub fn run() {
 
             // Tray icon + menu, built from the current tool list. Logs (does
             // not fail startup) if no SNI host is present.
-            let tools = commands::list_tools_impl(&handle.state::<state::AppState>());
+            let tools = commands::list_tools_impl(&handle.state::<state::AppState>(), None);
             if let Err(error) = tray::build(&handle, &tools) {
                 tracing::warn!(%error, "failed to build tray icon");
             }

@@ -121,6 +121,7 @@ mod tests {
                 category: "Capture".into(),
                 args: vec![],
                 available: true,
+                reason: None,
             },
             ToolSummary {
                 id: "image.convert".into(),
@@ -129,6 +130,7 @@ mod tests {
                 category: "Convert".into(),
                 args: vec![],
                 available: true,
+                reason: None,
             },
         ]
     }

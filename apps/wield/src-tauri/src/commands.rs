@@ -12,33 +12,41 @@ pub struct ToolSummary {
     pub category: String,
     pub args: Vec<wield_core::ArgSpec>,
     pub available: bool,
+    pub reason: Option<String>,
 }
 
-pub fn list_tools_impl(state: &AppState) -> Vec<ToolSummary> {
-    state
-        .registry
-        .list()
-        .iter()
-        .map(|descriptor| ToolSummary {
-            id: descriptor.id.as_ref().to_owned(),
-            title: descriptor.title.clone(),
-            keywords: descriptor.keywords.clone(),
-            category: match descriptor.category {
-                wield_core::Category::Capture => "Capture",
-                wield_core::Category::Convert => "Convert",
-                wield_core::Category::Desktop => "Desktop",
+pub fn list_tools_impl(state: &AppState, query: Option<&str>) -> Vec<ToolSummary> {
+    let descriptors: Vec<&wield_core::Descriptor> =
+        match query.map(str::trim).filter(|query| !query.is_empty()) {
+            Some(query) => state.registry.search(query),
+            None => state.registry.list().iter().collect(),
+        };
+    descriptors
+        .into_iter()
+        .map(|descriptor| {
+            let (available, reason) =
+                crate::capabilities::is_available(&state.availability, &descriptor.requires);
+            ToolSummary {
+                id: descriptor.id.as_ref().to_owned(),
+                title: descriptor.title.clone(),
+                keywords: descriptor.keywords.clone(),
+                category: match descriptor.category {
+                    wield_core::Category::Capture => "Capture",
+                    wield_core::Category::Convert => "Convert",
+                    wield_core::Category::Desktop => "Desktop",
+                }
+                .to_owned(),
+                args: descriptor.args.clone(),
+                available,
+                reason,
             }
-            .to_owned(),
-            args: descriptor.args.clone(),
-            available: crate::capabilities::is_available(&state.availability, &descriptor.requires)
-                .0,
         })
         .collect()
 }
 
 #[tauri::command]
-pub fn list_tools(state: tauri::State<'_, AppState>) -> Vec<ToolSummary> {
-    list_tools_impl(&state)
+pub fn list_tools(state: tauri::State<'_, AppState>, query: Option<String>) -> Vec<ToolSummary> {
+    list_tools_impl(&state, query.as_deref())
 }
 
 #[tauri::command]
@@ -172,6 +180,35 @@ mod tests {
         let mut permissions = std::fs::metadata(&path).unwrap().permissions();
         permissions.set_mode(0o755);
         std::fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[test]
+    fn list_tools_with_no_query_returns_registration_order() {
+        let state = AppState::for_test_sync();
+        let all = list_tools_impl(&state, None);
+        assert_eq!(
+            all.iter().map(|tool| tool.id.as_str()).collect::<Vec<_>>(),
+            vec!["color.pick", "image.convert"]
+        );
+    }
+
+    #[test]
+    fn list_tools_with_a_query_ranks_matches() {
+        let state = AppState::for_test_sync();
+        let hits = list_tools_impl(&state, Some("img conv"));
+        assert_eq!(hits.first().unwrap().id, "image.convert");
+        assert!(list_tools_impl(&state, Some("zzz nonsense")).is_empty());
+    }
+
+    #[test]
+    fn unavailable_tool_carries_a_reason() {
+        let state = AppState::for_test_sync();
+        let convert = list_tools_impl(&state, None)
+            .into_iter()
+            .find(|tool| tool.id == "image.convert")
+            .unwrap();
+        assert!(!convert.available);
+        assert!(convert.reason.unwrap().contains("magick"));
     }
 
     #[tokio::test]

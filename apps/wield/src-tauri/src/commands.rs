@@ -30,11 +30,8 @@ pub fn list_tools_impl(state: &AppState) -> Vec<ToolSummary> {
             }
             .to_owned(),
             args: descriptor.args.clone(),
-            available: crate::capabilities::is_available(
-                &state.availability,
-                &descriptor.requires,
-            )
-            .0,
+            available: crate::capabilities::is_available(&state.availability, &descriptor.requires)
+                .0,
         })
         .collect()
 }
@@ -45,9 +42,7 @@ pub fn list_tools(state: tauri::State<'_, AppState>) -> Vec<ToolSummary> {
 }
 
 #[tauri::command]
-pub fn capabilities(
-    state: tauri::State<'_, AppState>,
-) -> crate::capabilities::CapabilitiesReport {
+pub fn capabilities(state: tauri::State<'_, AppState>) -> crate::capabilities::CapabilitiesReport {
     crate::capabilities::report(&state)
 }
 
@@ -118,14 +113,7 @@ pub async fn run_tool_impl(
     let started = std::time::Instant::now();
     let outcome = state
         .executor
-        .run(
-            ExecutionRequest {
-                descriptor,
-                args,
-            },
-            progress,
-            token,
-        )
+        .run(ExecutionRequest { descriptor, args }, progress, token)
         .await;
     let _ = drain.await;
     state.take_run(&run_id);
@@ -190,9 +178,7 @@ mod tests {
         )
         .await;
         let args = serde_json::json!({ "input": input.to_string_lossy(), "format": "png" });
-        let result = run_tool_impl(&state, "image.convert", &args)
-            .await
-            .unwrap();
+        let result = run_tool_impl(&state, "image.convert", &args).await.unwrap();
         assert!(matches!(
             result.outcome,
             wield_core::ToolOutcome::File { .. }

@@ -1,10 +1,14 @@
 use serde::Serialize;
 
-mod logging;
 pub mod capabilities;
 pub mod commands;
+pub mod instance;
+mod logging;
 pub mod palette;
 pub mod state;
+
+#[cfg(test)]
+mod test_support;
 
 #[derive(Serialize)]
 pub struct AppInfo {

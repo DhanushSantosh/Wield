@@ -53,10 +53,7 @@ pub fn report(state: &AppState) -> CapabilitiesReport {
         .iter()
         .map(|descriptor| {
             if let Requires::Binary(binary) = &descriptor.requires {
-                binaries.insert(
-                    binary.clone(),
-                    state.availability.binaries.contains(binary),
-                );
+                binaries.insert(binary.clone(), state.availability.binaries.contains(binary));
             }
             let (available, reason) = is_available(&state.availability, &descriptor.requires);
             ToolAvailability {

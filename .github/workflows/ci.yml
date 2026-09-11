@@ -43,7 +43,18 @@ jobs:
       - run: npm ci
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      # --test-threads=1: cargo test --workspace's biggest test binary
+      # (wield-core's command_runner suite) spawns several short-lived child
+      # processes in parallel by default. Under the concurrent process churn
+      # of standard GitHub Actions runners, this project has repeatedly hit
+      # a real flake where a test racing a short timeout against a
+      # long-sleeping child sees the child report as exited far too early
+      # (see docs/testing.md) - consistent with a rare async-runtime
+      # process-reaping mixup under heavy concurrent spawn/reap load, not a
+      # logic bug in the code under test. Serializing removes the
+      # concurrent-spawn pressure that triggers it; the whole suite still
+      # runs in well under a second either way.
+      - run: cargo test --workspace -- --test-threads=1
       - run: npm run check
 
   e2e-smoke:

@@ -26,6 +26,10 @@
 
 - `.github/workflows/release.yml` builds and lints the Flatpak on every `v*`
   tag and uploads `wield.flatpak` as an artifact.
+- The manifest asks Tauri for its release binary with `--no-bundle`, then
+  installs the app-ID-named desktop file and metadata directly. Tauri's Debian
+  bundler probes for a host AppIndicator package that is intentionally absent
+  from the GNOME SDK even though Wield loads tray support dynamically.
 - Local full builds require Flatpak and Flatpak Builder. Those tools are not
   installed in the primary development sandbox, so the Flatpak build is
   validated in CI.

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Categories=Utility;
+Comment=Portal-native Linux utility hub
+Exec=wield-app
+StartupWMClass=wield-app
+Icon=io.github.DhanushSantosh.Wield
+Name=Wield
+Terminal=false
+Type=Application

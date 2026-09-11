@@ -28,16 +28,11 @@ modules:
       - . /usr/lib/sdk/node20/enable.sh
       - . /usr/lib/sdk/rust-stable/enable.sh
       - npm ci --offline --cache /run/build/wield/flatpak-node/npm-cache
-      - npm run build -w apps/wield -- --bundles deb --ci
-      - mkdir -p /tmp/deb-extract
-      - ar x target/release/bundle/deb/*.deb --output=/tmp/deb-extract
-      - tar xf /tmp/deb-extract/data.tar.* -C /tmp/deb-extract
-      - install -Dm755 /tmp/deb-extract/usr/bin/wield-app /app/bin/wield-app
+      - npm run build -w apps/wield -- --no-bundle --ci
+      - install -Dm755 target/release/wield-app /app/bin/wield-app
       - >-
-        sed -i 's/^Icon=.*/Icon=io.github.DhanushSantosh.Wield/'
-        /tmp/deb-extract/usr/share/applications/*.desktop
-      - >-
-        install -Dm644 /tmp/deb-extract/usr/share/applications/*.desktop
+        install -Dm644
+        packaging/flatpak/io.github.DhanushSantosh.Wield.desktop
         /app/share/applications/io.github.DhanushSantosh.Wield.desktop
       - >-
         install -Dm644 apps/wield/src-tauri/icons/icon.png

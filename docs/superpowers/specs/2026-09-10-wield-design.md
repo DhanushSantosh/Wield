@@ -444,10 +444,20 @@ Real compositor portal behavior in CI (manual matrix instead); third-party CLI i
 - **`finish-args` (deliberately minimal):**
   ```
   --socket=wayland  --socket=fallback-x11  --share=ipc  --device=dri
-  --talk-name=org.freedesktop.portal.Desktop
   --talk-name=org.kde.StatusNotifierWatcher
-  --own-name=io.github.DhanushSantosh.Wield
   ```
+  **Amended 2026-09-11 (P7):** the original draft also listed
+  `--talk-name=org.freedesktop.portal.Desktop` and
+  `--own-name=io.github.DhanushSantosh.Wield`. Both are unnecessary —
+  confirmed via `flatpak-builder-lint` (Flathub's own linter) during P7:
+  portal interfaces (`org.freedesktop.portal.*`) are reachable from inside
+  the sandbox without an explicit `talk-name` (that's what makes them
+  portals — the broker handles authorization, not Flatpak's static
+  permission model — and the linter's own exceptions list confirms this
+  one "is never granted", i.e. it's always considered a mistake to keep,
+  not something to request an exception for), and an app's own D-Bus name
+  is granted by default. Only the tray's `org.kde.StatusNotifierWatcher`
+  needs a real, explicit grant.
   **No `--filesystem=host`.** Files enter exclusively through the FileChooser portal
   (per-file grants via the document portal). Consequence: inside the sandbox the palette's
   converters always go through the portal picker — no arbitrary paths. CLI one-shot mode

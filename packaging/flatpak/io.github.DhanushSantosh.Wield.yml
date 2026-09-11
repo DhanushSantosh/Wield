@@ -11,9 +11,7 @@ finish-args:
   - --socket=fallback-x11
   - --share=ipc
   - --device=dri
-  - --talk-name=org.freedesktop.portal.Desktop
   - --talk-name=org.kde.StatusNotifierWatcher
-  - --own-name=io.github.DhanushSantosh.Wield
 
 modules:
   - name: wield

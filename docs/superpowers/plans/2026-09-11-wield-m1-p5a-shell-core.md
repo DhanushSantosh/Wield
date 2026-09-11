@@ -4,6 +4,8 @@
 
 **Goal:** Turn `apps/wield` from a placeholder into the headless core of the Wield shell: an app that launches with no visible window, holds the built-in registry + a portal-aware `Executor`, exposes `list_tools` / `run_tool` / `cancel` / `capabilities` as Tauri commands, pre-warms a hidden frameless palette window it can show on demand, and owns the single-instance `io.github.DhanushSantosh.Wield` D-Bus name with `ShowPalette` / `RunTool` methods so a second launch reaches the running one.
 
+**Status:** Complete on `feat/p5a-shell-core` — 2026-09-11.
+
 **Architecture:** `wield-app`'s `run()` first acquires the single-instance D-Bus name over raw `zbus`; if another instance holds it, `run()` relays (`ShowPalette`, or `RunTool` when invoked as a runner) and exits. The primary instance builds Tauri with an `AppState` (the `wield-tools` built-in `Registry`, an `Executor` wired with `BinaryResolver` + `wield-portal`'s `PortalAdapterRunner` + a startup `AvailabilityView` from `probe()`, and a map of in-flight `CancellationToken`s), registers the four commands, and creates one hidden `palette` window. `run_tool` awaits the executor and returns the `ToolOutcome` (progress streaming over a Tauri channel is P6). `show_palette` shows the window and logs the show→visible latency via `tracing`. `logging` sends `tracing` to `$XDG_STATE_HOME/wield/logs` with daily rotation.
 
 **Tech Stack:** Rust 2021, Tauri 2.9, `zbus` 5, Tokio, `tokio-util` `CancellationToken`, `tracing` + `tracing-subscriber` + `tracing-appender`, `uuid`; `wield-core` + `wield-tools` + `wield-portal` (path deps). `tauri` `test` feature for command tests.
@@ -81,7 +83,7 @@ Additional constraints from GEON:
 **Interfaces:**
 - Produces: `logging::init() -> Option<tracing_appender::non_blocking::WorkerGuard>` — installs a `tracing_subscriber` writing to `$XDG_STATE_HOME/wield/logs/` (fallback `~/.local/state/wield/logs/`), daily rotation via `tracing_appender::rolling::daily`, non-blocking. In `debug_assertions` also layer a stderr writer. Returns the guard the caller must hold for the process lifetime; `None` if the log dir can't be created (log to stderr only, never fail).
 
-- [ ] **Step 1: Workspace deps**
+- [x] **Step 1: Workspace deps**
 
 Root `Cargo.toml` `[workspace.dependencies]` — add:
 
@@ -93,7 +95,7 @@ tracing-appender = "0.2"
 
 (`zbus`, `uuid`, `tokio`, `tokio-util`, `serde`, `serde_json` already present.)
 
-- [ ] **Step 2: `apps/wield/src-tauri/Cargo.toml`**
+- [x] **Step 2: `apps/wield/src-tauri/Cargo.toml`**
 
 ```toml
 [dependencies]
@@ -116,16 +118,16 @@ tauri = { version = "2.9.5", features = ["test"] }
 tempfile.workspace = true
 ```
 
-- [ ] **Step 3: `src/logging.rs`** — implement `init()` per the Interfaces block.
+- [x] **Step 3: `src/logging.rs`** — implement `init()` per the Interfaces block.
 
-- [ ] **Step 4: `src/lib.rs`** — add `mod logging;` etc. as modules are created; call `let _guard = logging::init();` at the top of `run()`. Keep the existing `app_info` command and `tauri::Builder` for now (later tasks replace the builder body).
+- [x] **Step 4: `src/lib.rs`** — add `mod logging;` etc. as modules are created; call `let _guard = logging::init();` at the top of `run()`. Keep the existing `app_info` command and `tauri::Builder` for now (later tasks replace the builder body).
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo build -p wield-app && npm run check`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git checkout -b feat/p5a-shell-core
@@ -196,7 +198,7 @@ git commit -m "chore(app): P5a deps + tracing logging to XDG state dir"
   ```
   (`.expect("runs lock")` on a poisoned `Mutex` is acceptable in the shell — a poisoned lock means a prior panic already broke the process.)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `apps/wield/src-tauri/src/state.rs` tests module:
 
@@ -232,10 +234,10 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run to verify failure** — `cargo test -p wield-app state`
-- [ ] **Step 3: Implement `state.rs`; `mod state;` in `lib.rs`**
-- [ ] **Step 4: Run to verify pass** — `cargo test -p wield-app state`
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `cargo test -p wield-app state`
+- [x] **Step 3: Implement `state.rs`; `mod state;` in `lib.rs`**
+- [x] **Step 4: Run to verify pass** — `cargo test -p wield-app state`
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src-tauri
@@ -288,7 +290,7 @@ git commit -m "feat(app): AppState — registry, portal-wired executor, run toke
   }
   ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `apps/wield/src-tauri/tests/commands.rs`:
 
@@ -325,10 +327,10 @@ fn capabilities_lists_every_builtin_with_availability() {
 
 **NOTE for the implementer:** the exact `tauri::test` invocation API (whether it's `get_ipc_response`, `InvokePayload`, or `WebviewWindow::run_on_main_thread`) differs across Tauri 2.x. Use whatever the installed `tauri` 2.9 `test` module provides to invoke a command and read its JSON result. If `tauri::test` cannot invoke a command that takes only `State` in this version, fall back to **testing `crate::capabilities::report(&state)` directly** (it is a pure function) and keep one thin `#[tauri::command]` wrapper untested — note the fallback in the report.
 
-- [ ] **Step 2: Run to verify failure** — `cargo test -p wield-app --test commands`
-- [ ] **Step 3: Implement `capabilities.rs` + `commands.rs` + wire `mod`s and `invoke_handler` in `lib.rs`**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `cargo test -p wield-app --test commands`
+- [x] **Step 3: Implement `capabilities.rs` + `commands.rs` + wire `mod`s and `invoke_handler` in `lib.rs`**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src-tauri
@@ -361,7 +363,7 @@ git commit -m "feat(app): capabilities command — per-tool availability report"
   ```
   `list_tools` = `state.registry.list()` mapped to `ToolSummary`, with `available` computed exactly as in `capabilities::report`. Factor the availability check into `capabilities::is_available(&AvailabilityView, &Requires) -> (bool, Option<String>)` and use it in both.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```rust
 #[test]
@@ -376,8 +378,8 @@ fn list_tools_returns_both_builtins_with_arg_schemas() {
 ```
 Implement `list_tools` as a thin `#[tauri::command]` wrapper over `pub fn list_tools_impl(state: &AppState) -> Vec<ToolSummary>` so it is unit-testable regardless of the `tauri::test` API.
 
-- [ ] **Step 2-4: fail → implement → pass** (`cargo test -p wield-app`)
-- [ ] **Step 5: Commit**
+- [x] **Step 2-4: fail → implement → pass** (`cargo test -p wield-app`)
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src-tauri
@@ -418,7 +420,7 @@ git commit -m "feat(app): list_tools command with arg schemas"
   `run_tool_impl`: `state.registry.get(id)` → `coerce_json_args` → make `RunId` + `CancellationToken`, `state.register_run` → `state.executor.run(ExecutionRequest { descriptor: clone, args }, drained_progress_tx, token.clone()).await` → `state.take_run(&run_id)` → `RunResult { run_id, outcome }`. Progress is drained and discarded in P5a; P6 replaces the drain with a Tauri channel.
   `coerce_json_args`: for each key present, look up the `ArgSpec`; `File`/`Dir` → `ArgValue::Path`; `Int` → require a JSON integer; `Float` → number; `Bool` → bool; `Str`/`Text`/`Enum` → string. Unknown key or type mismatch → `Err`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```rust
 #[tokio::test]
@@ -455,8 +457,8 @@ async fn run_tool_rejects_unknown_tool() {
 ```
 Add `AppState::for_test(registry, resolver)` under `#[cfg(any(test, feature = "test-helpers"))]` — or just `#[cfg(test)]` and keep the test in `state.rs`/`commands.rs` in-file rather than the external `tests/` dir. Prefer in-file `#[cfg(test)]` so `for_test` needn't be public API.
 
-- [ ] **Step 2-4: fail → implement → pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2-4: fail → implement → pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src-tauri
@@ -480,7 +482,7 @@ git commit -m "feat(app): run_tool command — json args, executor, run registry
   }
   ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```rust
 #[tokio::test]
@@ -515,8 +517,8 @@ async fn cancel_stops_an_in_flight_run() {
 }
 ```
 
-- [ ] **Step 2-4: fail → implement → pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2-4: fail → implement → pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src-tauri
@@ -583,18 +585,18 @@ git commit -m "feat(app): cancel command — cancels an in-flight run"
   ```
 - `capabilities/default.json`: the `palette` window needs the window-show/hide/focus permissions. Set `"windows": ["palette"]` and add the show/hide/set-focus permission identifiers the installed Tauri exposes (e.g. `core:window:allow-show`, `core:window:allow-hide`, `core:window:allow-set-focus`). Verify against `cargo tauri` ACL or the generated `gen/schemas` after a build.
 
-- [ ] **Step 1: Update `tauri.conf.json` + `capabilities/default.json`**
+- [x] **Step 1: Update `tauri.conf.json` + `capabilities/default.json`**
 
-- [ ] **Step 2: Write `palette.rs` + the two commands**
+- [x] **Step 2: Write `palette.rs` + the two commands**
 
-- [ ] **Step 3: Verify the backend compiles and the window is defined**
+- [x] **Step 3: Verify the backend compiles and the window is defined**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && rm -rf apps/wield/src-tauri/gen && cargo check -p wield-app`
 Expected: PASS. Grep the regenerated `gen/schemas` or run `cargo tauri` to confirm `palette` is a known window label.
 
-- [ ] **Step 4: `npm run check`** — PASS.
+- [x] **Step 4: `npm run check`** — PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src-tauri
@@ -651,7 +653,7 @@ git commit -m "feat(app): hidden pre-warmed palette window + show/hide commands"
   - `Ok(AlreadyExists)` / name taken → build a proxy to `BUS_NAME`, call `ShowPalette` or `RunTool` per `run`, return `Secondary`.
   - `WieldService` `#[zbus::interface(name = "io.github.DhanushSantosh.Wield")]`: `async fn show_palette(&self)` → `self.handle.show_palette()`; `async fn run_tool(&self, id: &str, args_json: &str) -> String` → `self.handle.run_tool(id, args_json).await`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```rust
 #[cfg(test)]
@@ -692,10 +694,10 @@ Add a small `PrivateBus` helper (copy the shape from `wield-portal/tests/support
 
 `async_trait`: `wield-core` already depends on `async-trait` (P3) but does not re-export it. Add `async-trait.workspace = true` to `wield-app`'s deps (allowed — it is not one of the three lib crates).
 
-- [ ] **Step 2: Run to verify failure** — `cargo test -p wield-app instance`
-- [ ] **Step 3: Implement `instance.rs`**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `cargo test -p wield-app instance`
+- [x] **Step 3: Implement `instance.rs`**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src-tauri
@@ -752,7 +754,7 @@ git commit -m "feat(app): single-instance io.github.DhanushSantosh.Wield D-Bus s
   `PendingShell` — a `ShellHandle` that, before `bind()`, records/deferred calls; after `bind(AppHandle)`, forwards `show_palette` to `palette::show` and `run_tool` to `commands::run_tool_impl` (block_on). Keep it small.
   `runner_args_from_env()` — `None` for P5a (the `RunTool`-from-CLI relay is exercised by P4's standalone one-shot; P5a only needs `ShowPalette` relay). Return `None` and leave a `// P5b/P4-bridge` note.
 
-- [ ] **Step 1: Write the launch smoke test**
+- [x] **Step 1: Write the launch smoke test**
 
 `apps/wield/src-tauri/tests/launch.rs`:
 
@@ -784,14 +786,14 @@ fn shell_launches_headless_and_owns_the_bus_name() {
 ```
 (`busctl` is from systemd — present on this machine. If absent, skip.)
 
-- [ ] **Step 2: Run to verify failure / manual check**
+- [x] **Step 2: Run to verify failure / manual check**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-app --test launch -- --ignored`
 Expected: FAIL until `run()` is wired.
 
-- [ ] **Step 3: Implement the `run()` rewrite**
+- [x] **Step 3: Implement the `run()` rewrite**
 
-- [ ] **Step 4: Run to verify pass** + a manual launch:
+- [x] **Step 4: Run to verify pass** + a manual launch:
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -803,7 +805,7 @@ cargo run -p wield-app                    # second launch: relays ShowPalette, e
 kill %1
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src-tauri
@@ -814,7 +816,7 @@ git commit -m "feat(app): headless run() wiring — single-instance guard + Taur
 
 ## Task 10: Workspace green + P5a wrap-up
 
-- [ ] **Step 1: Full checks**
+- [x] **Step 1: Full checks**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -824,19 +826,19 @@ cargo test --workspace
 cargo test -p wield-app -- --ignored --list   # confirm the launch test is registered
 ```
 
-- [ ] **Step 2: `npm run check`** — PASS.
+- [x] **Step 2: `npm run check`** — PASS.
 
-- [ ] **Step 3: `docs/testing.md`** — create it (or append) with a "Palette latency" section: how `show_palette` logs `elapsed_ms`, where to read it (`$XDG_STATE_HOME/wield/logs/wield.log`), and that the real verdict comes in P6.
+- [x] **Step 3: `docs/testing.md`** — create it (or append) with a "Palette latency" section: how `show_palette` logs `elapsed_ms`, where to read it (`$XDG_STATE_HOME/wield/logs/wield.log`), and that the real verdict comes in P6.
 
-- [ ] **Step 4: Manual smoke** (Task 9 Step 4 commands) — paste the outcome into the report.
+- [x] **Step 4: Manual smoke** (Task 9 Step 4 commands) — paste the outcome into the report.
 
-- [ ] **Step 5: Report to GEON**
+- [x] **Step 5: Report to GEON**
 
 ```
 agent-comms message post --to GEON --kind FYI --subject "P5a complete" --body "wield-app shell core on feat/p5a-shell-core: AppState (registry + portal-wired executor + run tokens), list_tools/run_tool/cancel/capabilities commands, hidden pre-warmed palette window + show_palette (latency logged), single-instance io.github.DhanushSantosh.Wield D-Bus service (ShowPalette/RunTool), headless run() wiring. cargo test --workspace + clippy + npm run check green; manual launch: headless, owns the bus name, second launch relays. N commits, branch pushed."
 ```
 
-- [ ] **Step 6: Commit the plan + push**
+- [x] **Step 6: Commit the plan + push**
 
 ```bash
 git add docs/superpowers/plans/2026-09-11-wield-m1-p5a-shell-core.md docs/testing.md

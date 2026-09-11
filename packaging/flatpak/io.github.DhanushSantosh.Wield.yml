@@ -34,16 +34,14 @@ modules:
       - tar xf /tmp/deb-extract/data.tar.* -C /tmp/deb-extract
       - install -Dm755 /tmp/deb-extract/usr/bin/wield-app /app/bin/wield-app
       - >-
+        sed -i 's/^Icon=.*/Icon=io.github.DhanushSantosh.Wield/'
+        /tmp/deb-extract/usr/share/applications/*.desktop
+      - >-
         install -Dm644 /tmp/deb-extract/usr/share/applications/*.desktop
         /app/share/applications/io.github.DhanushSantosh.Wield.desktop
-      - |
-        for size in 32x32 128x128 256x256; do
-          src="/tmp/deb-extract/usr/share/icons/hicolor/$size/apps"
-          if [ -d "$src" ]; then
-            install -Dm644 "$src"/*.png \
-              "/app/share/icons/hicolor/$size/apps/io.github.DhanushSantosh.Wield.png"
-          fi
-        done
+      - >-
+        install -Dm644 apps/wield/src-tauri/icons/icon.png
+        /app/share/icons/hicolor/256x256/apps/io.github.DhanushSantosh.Wield.png
       - >-
         install -Dm644
         packaging/flatpak/io.github.DhanushSantosh.Wield.metainfo.xml

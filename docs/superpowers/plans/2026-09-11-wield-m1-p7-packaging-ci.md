@@ -606,13 +606,13 @@ git commit -m "docs: packaging pipeline overview"
 
 > **STOP — hard gate.** Before any command in this task, get an explicit, real-time go-ahead in chat for forking `flathub/flathub` and opening a PR against it. The scope approval that put "submit to Flathub" in this plan is a design-level decision, not the per-action confirmation this specific outward-facing publish still needs (per the operating rules governing this session: opening a PR on a third-party public repository is a "publish public content" action). If that confirmation isn't available when this task is reached, stop here — everything up through Task 7 stands on its own as a complete, working local pipeline regardless of whether this task runs.
 
-- [ ] **Step 1: Fork `flathub/flathub`**
+- [x] **Step 1: Fork `flathub/flathub`**
 
 ```bash
 gh repo fork flathub/flathub --clone=false
 ```
 
-- [ ] **Step 2: Add the submission on a new branch**
+- [x] **Step 2: Add the submission on a new branch**
 
 Flathub's own repo layout convention is one directory per app-id at the root:
 
@@ -628,7 +628,7 @@ git commit -m "Add io.github.DhanushSantosh.Wield"
 git push -u origin add-io.github.DhanushSantosh.Wield
 ```
 
-- [ ] **Step 3: Open the PR**
+- [x] **Step 3: Open the PR**
 
 ```bash
 gh pr create --repo flathub/flathub \
@@ -638,7 +638,7 @@ gh pr create --repo flathub/flathub \
   --body "New submission: Wield, a portal-native command palette and tray for Linux. Source: https://github.com/DhanushSantosh/Wield. Known gap flagged up front: the icon is a placeholder pending a real design asset (tracked in the upstream repo's docs/packaging.md) — expect that to come up in review."
 ```
 
-- [ ] **Step 4: Record the outcome**
+- [x] **Step 4: Record the outcome**
 
 Update `docs/packaging.md`'s "Flathub submission status" section with the PR URL (or, if the confirmation gate stopped execution, a note that Task 8 is prepared but not yet run, with a pointer to this plan).
 
@@ -656,7 +656,7 @@ git commit -m "docs: record the Flathub submission PR"
 
 > This changes repo governance (branch protection is a standing/persistent configuration) — confirm with the owner before running Step 1, same category of action as Task 8's gate, though lower-stakes (reversible, affects only this repo).
 
-- [ ] **Step 1: Add the required status check**
+- [x] **Step 1: Add the required status check**
 
 ```bash
 gh api repos/DhanushSantosh/Wield/branches/master/protection \
@@ -681,14 +681,14 @@ EOF
 ```
 This preserves every existing branch-protection setting from P1 (0 approvals, `enforce_admins=false`, no force-push, no deletion, required conversation resolution) and adds `ci.yml`'s `test` job as a required check. `contexts: ["test"]` — not `"e2e-smoke"` — deliberately: the E2E job takes minutes and touches a real D-Bus session, higher flake surface than the fast job; gating merges on it is a call worth revisiting once it's proven stable over a few real PRs, not made unilaterally here.
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```bash
 gh api repos/DhanushSantosh/Wield/branches/master/protection/required_status_checks
 ```
 Expected: `contexts` includes `"test"`.
 
-- [ ] **Step 3: Commit** — nothing to commit (a GitHub API-side setting); this step is a no-op, kept for consistency with the plan's task numbering.
+- [x] **Step 3: Commit** — nothing to commit (a GitHub API-side setting); this step is a no-op, kept for consistency with the plan's task numbering.
 
 ---
 
@@ -714,13 +714,13 @@ gh run list --branch feat/p7-packaging-ci --limit 5
 ```
 Expected: the most recent `CI` run (Task 3) is green. The `Release` run (Task 6) was already verified and its disposable tag cleaned up — confirm no stray `v0.1.0-p7-smoke` tag remains (`git tag -l 'v0.1.0-p7-smoke'` empty, both locally and via `git ls-remote --tags origin`).
 
-- [ ] **Step 3: Report to GEON** (only if this plan was dispatched to SUNIO — skip if GEON is executing this directly)
+- [x] **Step 3: Report to GEON** (only if this plan was dispatched to SUNIO — skip if GEON is executing this directly)
 
 ```
 agent-comms message post --to GEON --kind FYI --subject "P7 complete" --body "CI (.github/workflows/ci.yml) gates every push/PR: fmt+clippy+cargo test+npm check, plus a real E2E smoke test (RunTool over D-Bus, image.convert on a real fixture, under xvfb+dbus-run-session). Release workflow builds+lints the Flatpak on version tags. Flatpak manifest builds wield-app only (color.pick works inside the sandbox; image.convert reports Unavailable - no bundled magick yet, deferred to a P7-tools follow-up, named not silently dropped). Flathub submission: <PR link | stopped at the confirmation gate, prepared but not opened>. Branch protection now requires the CI 'test' job. N commits, branch pushed."
 ```
 
-- [ ] **Step 4: Mark the plan complete, commit, push**
+- [x] **Step 4: Mark the plan complete, commit, push**
 
 ```bash
 git add docs/superpowers/plans/2026-09-11-wield-m1-p7-packaging-ci.md
@@ -770,4 +770,7 @@ SUNIO executed Tasks 1–7 on `feat/p7-packaging-ci`, iterating through the Task
 - Observed one CI-only test flake (`wield-core::command_runner::kills_on_timeout`, on the intermediate `8929493` run) — the exact class of pre-existing, load-sensitive flake this project's own history already anticipated needing "P7 CI tuning" for (see `docs/testing.md`'s P5a section). Passed clean on the very next push. Not chased into a fix here, consistent with this plan's own promise that the Rust side stays untouched apart from SUNIO's two already-justified fixes above — flagged here for visibility, not silently absorbed.
 - Full local re-verification: `cargo fmt --all` (no diff), `cargo clippy --workspace --all-targets -D warnings` (clean), `cargo test --workspace` (all green, 0 failed), `npm run check` (20 files / 70 tests, clean), both new file-validity checks (metainfo XML, both vendored-sources JSON files) — all pass.
 
-**Tasks 8 and 9 are deliberately NOT executed by GEON in this continuation.** Both are hard/soft-gated on a fresh, explicit, real-time confirmation per this plan's own GEON amendment (items 5 and the Task 9 note) — "continue the plan" is authorization to keep doing the work, not the specific per-action go-ahead either gate requires. Everything through Task 7 stands on its own as a complete, working, CI-verified pipeline regardless of whether 8/9 ever run. Asking the owner explicitly for each, separately, before touching either.
+**Tasks 8 and 9, after explicit per-action confirmation (asked separately, both answered yes):**
+
+- **Task 9:** added `test` as a required branch-protection status check on `master` via the GitHub API, preserving every existing setting (0 approvals, `enforce_admins=false`, no force-push/deletion, required conversation resolution). Verified via a follow-up API read.
+- **Task 8:** Flathub's actual current submission process differs from this plan's guess in three real ways, discovered by reading `flathub/flathub`'s live `CONTRIBUTING.md` and `docs.flathub.org` directly rather than trusting the plan text: (1) PRs target the **`new-pr` branch**, not `master` — `flathub/flathub`'s `master` branch holds no app directories at all any more (checked directly: only `.github`, `CODEOWNERS`, `CONTRIBUTING.md`, `COPYING`, `README.md`), and `new-pr` is a genuinely empty branch (its tree is git's well-known empty-tree hash) that submitters branch from; (2) **only the manifest file goes in the submission**, committed directly at the branch root and named after the app-id — no per-app subdirectory; (3) the metainfo/desktop-file/icon must **not** be duplicated into the submission — Flathub's requirements page is explicit that those "must be integrated in the upstream project," which Wield's manifest already satisfies (it installs all three from this repo's own `packaging/flatpak/` at build time). Opened: https://github.com/flathub/flathub/pull/10176. Recorded in `docs/packaging.md`.

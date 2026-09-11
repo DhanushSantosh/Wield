@@ -63,6 +63,11 @@
 
 ## Flathub submission status
 
-The submission manifest and metadata are prepared. Opening a public pull
-request against `flathub/flathub` remains pending the fresh confirmation gate
-in Task 8 of the P7 implementation plan.
+Opened: https://github.com/flathub/flathub/pull/10176 (2026-09-11), against
+the `new-pr` base branch per Flathub's current submission process — only the
+manifest (`io.github.DhanushSantosh.Wield.yml`) is committed to the
+submission itself; the metainfo/desktop-file/icon stay in this upstream
+repo's own `packaging/flatpak/` directory, which is where Flathub's
+guidelines require them to live. Awaiting reviewer feedback; expect the
+placeholder icon and missing screenshots (both flagged in the PR body) to
+come up.

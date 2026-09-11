@@ -1,0 +1,55 @@
+app-id: io.github.DhanushSantosh.Wield
+runtime: org.gnome.Platform
+runtime-version: "50"
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.node20
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: wield-app
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --own-name=io.github.DhanushSantosh.Wield
+
+modules:
+  - name: wield
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/node20/bin:/usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/wield/cargo
+        CARGO_NET_OFFLINE: "true"
+        npm_config_cache: /run/build/wield/flatpak-node/npm-cache
+    build-commands:
+      - . /usr/lib/sdk/node20/enable.sh
+      - . /usr/lib/sdk/rust-stable/enable.sh
+      - npm ci --offline --cache /run/build/wield/flatpak-node/npm-cache
+      - npm run build -w apps/wield -- --bundles deb --ci
+      - mkdir -p /tmp/deb-extract
+      - ar x target/release/bundle/deb/*.deb --output=/tmp/deb-extract
+      - tar xf /tmp/deb-extract/data.tar.* -C /tmp/deb-extract
+      - install -Dm755 /tmp/deb-extract/usr/bin/wield-app /app/bin/wield-app
+      - >-
+        install -Dm644 /tmp/deb-extract/usr/share/applications/*.desktop
+        /app/share/applications/io.github.DhanushSantosh.Wield.desktop
+      - |
+        for size in 32x32 128x128 256x256; do
+          src="/tmp/deb-extract/usr/share/icons/hicolor/$size/apps"
+          if [ -d "$src" ]; then
+            install -Dm644 "$src"/*.png \
+              "/app/share/icons/hicolor/$size/apps/io.github.DhanushSantosh.Wield.png"
+          fi
+        done
+      - >-
+        install -Dm644
+        packaging/flatpak/io.github.DhanushSantosh.Wield.metainfo.xml
+        /app/share/metainfo/io.github.DhanushSantosh.Wield.metainfo.xml
+    sources:
+      - type: dir
+        path: ../..
+      - cargo-sources.json
+      - node-sources.json

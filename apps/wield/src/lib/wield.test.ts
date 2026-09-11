@@ -16,7 +16,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { cancelRun, listTools, runTool } from "./wield";
+import { cancelRun, hidePalette, listTools, runTool } from "./wield";
 
 beforeEach(() => {
   invokeMock.mockReset();
@@ -36,13 +36,17 @@ test("listTools passes the query through, defaulting to null", async () => {
 test("runTool wires a Channel and forwards progress events to onProgress", async () => {
   invokeMock.mockResolvedValueOnce({ run_id: "abc", outcome: "Cancelled" });
   const seen: unknown[] = [];
-  const result = await runTool("image.convert", { input: "/x/a.png" }, (progress) =>
-    seen.push(progress),
+  const result = await runTool(
+    "image.convert",
+    { input: "/x/a.png" },
+    (progress) => seen.push(progress),
+    "known-run",
   );
   expect(result.outcome).toBe("Cancelled");
   const payload = invokeMock.mock.calls[0][1] as Record<string, unknown>;
   expect(payload.id).toBe("image.convert");
   expect(payload.args).toEqual({ input: "/x/a.png" });
+  expect(payload.runId).toBe("known-run");
   channelInstances.at(-1)?.onmessage?.("Started");
   expect(seen).toEqual(["Started"]);
 });
@@ -51,4 +55,10 @@ test("cancelRun invokes cancel with the run id", async () => {
   invokeMock.mockResolvedValueOnce(true);
   expect(await cancelRun("abc")).toBe(true);
   expect(invokeMock).toHaveBeenCalledWith("cancel", { runId: "abc" });
+});
+
+test("hidePalette invokes the palette hide command", async () => {
+  invokeMock.mockResolvedValueOnce(undefined);
+  await hidePalette();
+  expect(invokeMock).toHaveBeenCalledWith("hide_palette");
 });

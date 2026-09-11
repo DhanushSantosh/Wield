@@ -106,6 +106,7 @@ pub async fn run_tool_impl(
     state: &AppState,
     id: &str,
     args: &serde_json::Value,
+    requested_run_id: Option<crate::state::RunId>,
     mut on_progress: impl FnMut(wield_core::Progress) + Send + 'static,
 ) -> Result<RunResult, String> {
     let descriptor = state
@@ -114,7 +115,7 @@ pub async fn run_tool_impl(
         .cloned()
         .ok_or_else(|| format!("unknown tool: {id}"))?;
     let args = coerce_json_args(&descriptor, args)?;
-    let run_id = crate::state::RunId::new();
+    let run_id = requested_run_id.unwrap_or_default();
     let token = CancellationToken::new();
     state.register_run(run_id.clone(), token.clone());
     let (progress, mut progress_rx) = tokio::sync::mpsc::channel(32);
@@ -144,9 +145,10 @@ pub async fn run_tool(
     state: tauri::State<'_, AppState>,
     id: String,
     args: serde_json::Value,
+    run_id: Option<crate::state::RunId>,
     progress: tauri::ipc::Channel<wield_core::Progress>,
 ) -> Result<RunResult, String> {
-    run_tool_impl(&state, &id, &args, move |event| {
+    run_tool_impl(&state, &id, &args, run_id, move |event| {
         let _ = progress.send(event);
     })
     .await
@@ -235,7 +237,7 @@ mod tests {
         )
         .await;
         let args = serde_json::json!({ "input": input.to_string_lossy(), "format": "png" });
-        let result = run_tool_impl(&state, "image.convert", &args, |_| {})
+        let result = run_tool_impl(&state, "image.convert", &args, None, |_| {})
             .await
             .unwrap();
         assert!(matches!(
@@ -263,7 +265,7 @@ mod tests {
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let seen_clone = seen.clone();
 
-        let result = run_tool_impl(&state, "image.convert", &args, move |progress| {
+        let result = run_tool_impl(&state, "image.convert", &args, None, move |progress| {
             seen_clone.lock().unwrap().push(progress);
         })
         .await
@@ -303,17 +305,26 @@ mod tests {
         );
         let args = serde_json::json!({ "input": input.to_string_lossy(), "format": "png" });
         let run_state = state.clone();
+        let requested_run_id = crate::state::RunId("frontend-known-id".to_owned());
+        let task_run_id = requested_run_id.clone();
         let run = tokio::spawn(async move {
-            run_tool_impl(&run_state, "image.convert", &args, |_| {})
-                .await
-                .unwrap()
+            run_tool_impl(
+                &run_state,
+                "image.convert",
+                &args,
+                Some(task_run_id),
+                |_| {},
+            )
+            .await
+            .unwrap()
         });
 
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         let ids = state.in_flight_ids();
-        assert_eq!(ids.len(), 1);
-        assert!(state.cancel_run(&ids[0]));
+        assert_eq!(ids, vec![requested_run_id.clone()]);
+        assert!(state.cancel_run(&requested_run_id));
         let result = run.await.unwrap();
+        assert_eq!(result.run_id, requested_run_id);
         assert!(matches!(result.outcome, ToolOutcome::Cancelled));
     }
 }

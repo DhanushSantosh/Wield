@@ -72,6 +72,10 @@ export interface RunResult {
   outcome: ToolOutcome;
 }
 
+export function createRunId(): RunId {
+  return crypto.randomUUID();
+}
+
 export async function listTools(query?: string): Promise<ToolSummary[]> {
   return invoke<ToolSummary[]>("list_tools", { query: query ?? null });
 }
@@ -80,12 +84,17 @@ export async function runTool(
   id: string,
   args: Record<string, unknown>,
   onProgress: (progress: Progress) => void,
+  runId: RunId,
 ): Promise<RunResult> {
   const progress = new Channel<Progress>();
   progress.onmessage = onProgress;
-  return invoke<RunResult>("run_tool", { id, args, progress });
+  return invoke<RunResult>("run_tool", { id, args, runId, progress });
 }
 
 export async function cancelRun(runId: RunId): Promise<boolean> {
   return invoke<boolean>("cancel", { runId });
+}
+
+export async function hidePalette(): Promise<void> {
+  return invoke<void>("hide_palette");
 }

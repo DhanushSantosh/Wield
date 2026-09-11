@@ -102,7 +102,7 @@ impl instance::ShellHandle for PendingShell {
         };
         let app = self.wait_for_app().await;
         let state = app.state::<state::AppState>();
-        match commands::run_tool_impl(&state, id, &args, |_| {}).await {
+        match commands::run_tool_impl(&state, id, &args, None, |_| {}).await {
             Ok(result) => outcome_json(result.outcome),
             Err(detail) => outcome_json(ToolOutcome::Failed {
                 stage: Stage::Validation,

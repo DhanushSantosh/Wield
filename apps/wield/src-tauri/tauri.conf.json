@@ -11,7 +11,18 @@
   },
   "app": {
     "windows": [
-      { "title": "Wield", "width": 1280, "height": 820, "minWidth": 980, "minHeight": 640 }
+      {
+        "label": "palette",
+        "title": "Wield",
+        "width": 720,
+        "height": 480,
+        "center": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "visible": false
+      }
     ],
     "security": { "csp": null }
   },

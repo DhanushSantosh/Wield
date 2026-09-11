@@ -152,6 +152,16 @@ pub fn cancel(state: tauri::State<'_, AppState>, run_id: crate::state::RunId) ->
     state.cancel_run(&run_id)
 }
 
+#[tauri::command]
+pub fn show_palette(app: tauri::AppHandle) {
+    crate::palette::show(&app);
+}
+
+#[tauri::command]
+pub fn hide_palette(app: tauri::AppHandle) {
+    crate::palette::hide(&app);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

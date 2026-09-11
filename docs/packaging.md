@@ -20,6 +20,9 @@
   isolated Python environment. The primary Arch development environment is
   externally managed under PEP 668, so the P7 generation run used a temporary
   virtual environment rather than modifying the system Python installation.
+  Run the Node generator from a clean checkout, or temporarily move the root
+  `node_modules` directory aside. Version 0.1.1 treats installed packages as
+  local sources and otherwise emits an incomplete offline cache.
 
 - `.github/workflows/release.yml` builds and lints the Flatpak on every `v*`
   tag and uploads `wield.flatpak` as an artifact.

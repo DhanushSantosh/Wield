@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+mod logging;
+
 #[derive(Serialize)]
 pub struct AppInfo {
     pub name: String,
@@ -15,6 +17,7 @@ fn app_info() -> AppInfo {
 }
 
 pub fn run() {
+    let _guard = logging::init();
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![app_info])
         .run(tauri::generate_context!())

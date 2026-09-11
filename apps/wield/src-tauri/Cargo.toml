@@ -15,6 +15,20 @@ tauri-build = { version = "2.5.3", features = [] }
 
 [dependencies]
 wield-core = { path = "../../../crates/wield-core" }
+wield-tools = { path = "../../../crates/wield-tools" }
+wield-portal = { path = "../../../crates/wield-portal" }
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.9.5", features = [] }
+zbus.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "macros", "time"] }
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+uuid.workspace = true
+async-trait.workspace = true
+
+[dev-dependencies]
+tauri = { version = "2.9.5", features = ["test"] }
+tempfile.workspace = true

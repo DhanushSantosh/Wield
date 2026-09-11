@@ -12,33 +12,41 @@ pub struct ToolSummary {
     pub category: String,
     pub args: Vec<wield_core::ArgSpec>,
     pub available: bool,
+    pub reason: Option<String>,
 }
 
-pub fn list_tools_impl(state: &AppState) -> Vec<ToolSummary> {
-    state
-        .registry
-        .list()
-        .iter()
-        .map(|descriptor| ToolSummary {
-            id: descriptor.id.as_ref().to_owned(),
-            title: descriptor.title.clone(),
-            keywords: descriptor.keywords.clone(),
-            category: match descriptor.category {
-                wield_core::Category::Capture => "Capture",
-                wield_core::Category::Convert => "Convert",
-                wield_core::Category::Desktop => "Desktop",
+pub fn list_tools_impl(state: &AppState, query: Option<&str>) -> Vec<ToolSummary> {
+    let descriptors: Vec<&wield_core::Descriptor> =
+        match query.map(str::trim).filter(|query| !query.is_empty()) {
+            Some(query) => state.registry.search(query),
+            None => state.registry.list().iter().collect(),
+        };
+    descriptors
+        .into_iter()
+        .map(|descriptor| {
+            let (available, reason) =
+                crate::capabilities::is_available(&state.availability, &descriptor.requires);
+            ToolSummary {
+                id: descriptor.id.as_ref().to_owned(),
+                title: descriptor.title.clone(),
+                keywords: descriptor.keywords.clone(),
+                category: match descriptor.category {
+                    wield_core::Category::Capture => "Capture",
+                    wield_core::Category::Convert => "Convert",
+                    wield_core::Category::Desktop => "Desktop",
+                }
+                .to_owned(),
+                args: descriptor.args.clone(),
+                available,
+                reason,
             }
-            .to_owned(),
-            args: descriptor.args.clone(),
-            available: crate::capabilities::is_available(&state.availability, &descriptor.requires)
-                .0,
         })
         .collect()
 }
 
 #[tauri::command]
-pub fn list_tools(state: tauri::State<'_, AppState>) -> Vec<ToolSummary> {
-    list_tools_impl(&state)
+pub fn list_tools(state: tauri::State<'_, AppState>, query: Option<String>) -> Vec<ToolSummary> {
+    list_tools_impl(&state, query.as_deref())
 }
 
 #[tauri::command]
@@ -98,6 +106,8 @@ pub async fn run_tool_impl(
     state: &AppState,
     id: &str,
     args: &serde_json::Value,
+    requested_run_id: Option<crate::state::RunId>,
+    mut on_progress: impl FnMut(wield_core::Progress) + Send + 'static,
 ) -> Result<RunResult, String> {
     let descriptor = state
         .registry
@@ -105,17 +115,21 @@ pub async fn run_tool_impl(
         .cloned()
         .ok_or_else(|| format!("unknown tool: {id}"))?;
     let args = coerce_json_args(&descriptor, args)?;
-    let run_id = crate::state::RunId::new();
+    let run_id = requested_run_id.unwrap_or_default();
     let token = CancellationToken::new();
     state.register_run(run_id.clone(), token.clone());
-    let (progress, mut progress_rx) = tokio::sync::mpsc::channel(16);
-    let drain = tokio::spawn(async move { while progress_rx.recv().await.is_some() {} });
+    let (progress, mut progress_rx) = tokio::sync::mpsc::channel(32);
+    let forward = tokio::spawn(async move {
+        while let Some(progress) = progress_rx.recv().await {
+            on_progress(progress);
+        }
+    });
     let started = std::time::Instant::now();
     let outcome = state
         .executor
         .run(ExecutionRequest { descriptor, args }, progress, token)
         .await;
-    let _ = drain.await;
+    let _ = forward.await;
     state.take_run(&run_id);
     tracing::info!(
         tool_id = id,
@@ -131,8 +145,13 @@ pub async fn run_tool(
     state: tauri::State<'_, AppState>,
     id: String,
     args: serde_json::Value,
+    run_id: Option<crate::state::RunId>,
+    progress: tauri::ipc::Channel<wield_core::Progress>,
 ) -> Result<RunResult, String> {
-    run_tool_impl(&state, &id, &args).await
+    run_tool_impl(&state, &id, &args, run_id, move |event| {
+        let _ = progress.send(event);
+    })
+    .await
 }
 
 #[tauri::command]
@@ -174,6 +193,35 @@ mod tests {
         std::fs::set_permissions(path, permissions).unwrap();
     }
 
+    #[test]
+    fn list_tools_with_no_query_returns_registration_order() {
+        let state = AppState::for_test_sync();
+        let all = list_tools_impl(&state, None);
+        assert_eq!(
+            all.iter().map(|tool| tool.id.as_str()).collect::<Vec<_>>(),
+            vec!["color.pick", "image.convert"]
+        );
+    }
+
+    #[test]
+    fn list_tools_with_a_query_ranks_matches() {
+        let state = AppState::for_test_sync();
+        let hits = list_tools_impl(&state, Some("img conv"));
+        assert_eq!(hits.first().unwrap().id, "image.convert");
+        assert!(list_tools_impl(&state, Some("zzz nonsense")).is_empty());
+    }
+
+    #[test]
+    fn unavailable_tool_carries_a_reason() {
+        let state = AppState::for_test_sync();
+        let convert = list_tools_impl(&state, None)
+            .into_iter()
+            .find(|tool| tool.id == "image.convert")
+            .unwrap();
+        assert!(!convert.available);
+        assert!(convert.reason.unwrap().contains("magick"));
+    }
+
     #[tokio::test]
     async fn run_tool_runs_a_command_tool_against_a_stub() {
         let directory = tempfile::tempdir().unwrap();
@@ -189,12 +237,44 @@ mod tests {
         )
         .await;
         let args = serde_json::json!({ "input": input.to_string_lossy(), "format": "png" });
-        let result = run_tool_impl(&state, "image.convert", &args).await.unwrap();
+        let result = run_tool_impl(&state, "image.convert", &args, None, |_| {})
+            .await
+            .unwrap();
         assert!(matches!(
             result.outcome,
             wield_core::ToolOutcome::File { .. }
         ));
         assert!(state.take_run(&result.run_id).is_none());
+    }
+
+    #[tokio::test]
+    async fn run_tool_forwards_progress_before_the_final_outcome() {
+        let directory = tempfile::tempdir().unwrap();
+        write_stub(
+            directory.path(),
+            "#!/bin/sh\nlast=\"\"\nfor arg in \"$@\"; do last=\"$arg\"; done\ncat \"$1\" > \"$last\"\n",
+        );
+        let input = directory.path().join("in.png");
+        std::fs::write(&input, b"IMG").unwrap();
+        let state = AppState::for_test(
+            wield_tools::builtin_registry(),
+            wield_core::BinaryResolver::with_dirs(vec![directory.path().to_path_buf()]),
+        )
+        .await;
+        let args = serde_json::json!({ "input": input.to_string_lossy(), "format": "png" });
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen_clone = seen.clone();
+
+        let result = run_tool_impl(&state, "image.convert", &args, None, move |progress| {
+            seen_clone.lock().unwrap().push(progress);
+        })
+        .await
+        .unwrap();
+
+        assert!(matches!(result.outcome, ToolOutcome::File { .. }));
+        let events = seen.lock().unwrap();
+        assert!(events.contains(&wield_core::Progress::Started));
+        assert!(events.contains(&wield_core::Progress::Finished));
     }
 
     #[tokio::test]
@@ -225,17 +305,26 @@ mod tests {
         );
         let args = serde_json::json!({ "input": input.to_string_lossy(), "format": "png" });
         let run_state = state.clone();
+        let requested_run_id = crate::state::RunId("frontend-known-id".to_owned());
+        let task_run_id = requested_run_id.clone();
         let run = tokio::spawn(async move {
-            run_tool_impl(&run_state, "image.convert", &args)
-                .await
-                .unwrap()
+            run_tool_impl(
+                &run_state,
+                "image.convert",
+                &args,
+                Some(task_run_id),
+                |_| {},
+            )
+            .await
+            .unwrap()
         });
 
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         let ids = state.in_flight_ids();
-        assert_eq!(ids.len(), 1);
-        assert!(state.cancel_run(&ids[0]));
+        assert_eq!(ids, vec![requested_run_id.clone()]);
+        assert!(state.cancel_run(&requested_run_id));
         let result = run.await.unwrap();
+        assert_eq!(result.run_id, requested_run_id);
         assert!(matches!(result.outcome, ToolOutcome::Cancelled));
     }
 }

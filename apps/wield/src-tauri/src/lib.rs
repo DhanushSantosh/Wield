@@ -102,7 +102,7 @@ impl instance::ShellHandle for PendingShell {
         };
         let app = self.wait_for_app().await;
         let state = app.state::<state::AppState>();
-        match commands::run_tool_impl(&state, id, &args).await {
+        match commands::run_tool_impl(&state, id, &args, None, |_| {}).await {
             Ok(result) => outcome_json(result.outcome),
             Err(detail) => outcome_json(ToolOutcome::Failed {
                 stage: Stage::Validation,
@@ -141,6 +141,8 @@ pub fn run() {
     let setup_shell = shell.clone();
 
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             app_info,
@@ -174,7 +176,7 @@ pub fn run() {
 
             // Tray icon + menu, built from the current tool list. Logs (does
             // not fail startup) if no SNI host is present.
-            let tools = commands::list_tools_impl(&handle.state::<state::AppState>());
+            let tools = commands::list_tools_impl(&handle.state::<state::AppState>(), None);
             if let Err(error) = tray::build(&handle, &tools) {
                 tracing::warn!(%error, "failed to build tray icon");
             }

@@ -8,7 +8,7 @@ fn capabilities_lists_every_builtin_with_availability() {
 #[test]
 fn list_tools_returns_both_builtins_with_arg_schemas() {
     let state = tauri::async_runtime::block_on(wield_app_lib::state::AppState::build());
-    let tools = wield_app_lib::commands::list_tools_impl(&state);
+    let tools = wield_app_lib::commands::list_tools_impl(&state, None);
     assert_eq!(tools.len(), 2);
     let convert = tools
         .iter()

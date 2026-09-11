@@ -1,0 +1,35 @@
+.field-control,
+.field-picker {
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: 14px/1.35 var(--font-ui);
+}
+
+.field-picker {
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.field-control--multiline {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  color: var(--text);
+}
+
+.field-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}

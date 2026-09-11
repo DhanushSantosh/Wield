@@ -105,6 +105,16 @@ impl AppState {
     }
 
     #[cfg(test)]
+    pub(crate) fn for_test_sync() -> Self {
+        let mut state = tauri::async_runtime::block_on(Self::for_test(
+            wield_tools::builtin_registry(),
+            wield_core::BinaryResolver::with_dirs(vec![]),
+        ));
+        state.availability.binaries.clear();
+        state
+    }
+
+    #[cfg(test)]
     pub(crate) fn in_flight_ids(&self) -> Vec<RunId> {
         self.runs
             .lock()

@@ -1,0 +1,57 @@
+:root {
+  --bg: #0a0a0a;
+  --surface: #161616;
+  --border: #1c1c1c;
+  --text: #e8e8e8;
+  --text-muted: #6b6b6b;
+  --text-faint: #4a4a4a;
+  --accent: #3ed0c4;
+  --accent-ink: #0c1a18;
+  --danger: #d9714f;
+
+  --font-ui: "Inter", -apple-system, "Segoe UI", sans-serif;
+  --font-data: ui-monospace, "JetBrains Mono", monospace;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.app-shell {
+  background: var(--bg);
+  border-radius: 15px;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.6),
+    0 0 0 1px var(--border);
+  max-width: 520px;
+  margin: 0 auto;
+  overflow: hidden;
+  transition: max-height 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell {
+    transition: none;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

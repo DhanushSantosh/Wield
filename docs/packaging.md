@@ -33,6 +33,17 @@
 - Local full builds require Flatpak and Flatpak Builder. Those tools are not
   installed in the primary development sandbox, so the Flatpak build is
   validated in CI.
+- `finish-args` dropped two entries the original design spec listed:
+  `--talk-name=org.freedesktop.portal.Desktop` and
+  `--own-name=io.github.DhanushSantosh.Wield`. `flatpak-builder-lint`
+  (Flathub's own linter) flags both — portal interfaces are reachable from
+  inside the sandbox without an explicit `talk-name` grant, and an app's own
+  D-Bus name is granted by default. The spec has been amended to match
+  (`docs/superpowers/specs/2026-09-10-wield-design.md` §9).
+- The Flatpak lint step tolerates exactly two known findings
+  (`metainfo-missing-screenshots`, `appstream-screenshots-not-mirrored-in-ostree`
+  — both covered under "Known gaps" below) and fails on anything else, rather
+  than suppressing the whole lint step.
 
 ### Known gaps
 

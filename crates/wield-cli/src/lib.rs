@@ -6,7 +6,10 @@ pub mod render;
 pub mod surface;
 
 use std::sync::Arc;
-use wield_core::{AvailabilityView, BinaryResolver, ExecutionRequest, Executor, Registry};
+use wield_core::{
+    validate_args, AvailabilityView, BinaryResolver, ExecutionRequest, Executor, Registry, Stage,
+    ToolOutcome,
+};
 use wield_portal::PortalAdapterRunner;
 use wield_tools::builtin_registry;
 
@@ -55,6 +58,20 @@ pub async fn run(argv: Vec<String>) -> i32 {
         }
     };
 
+    // Reject invalid input before probing desktop portals. Besides being faster,
+    // this keeps usage errors responsive when no portal service is available.
+    if let Err(errors) = validate_args(&descriptor.args, &arg_map) {
+        return write_outcome(ToolOutcome::Failed {
+            stage: Stage::Validation,
+            detail: errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; "),
+            hint: None,
+        });
+    }
+
     let resolver = BinaryResolver::from_env();
     let mut availability = AvailabilityView::probe_binaries(&resolver, registry.list());
     wield_portal::probe().await.apply_to(&mut availability);
@@ -78,6 +95,10 @@ pub async fn run(argv: Vec<String>) -> i32 {
         .await;
     drain.abort();
 
+    write_outcome(outcome)
+}
+
+fn write_outcome(outcome: ToolOutcome) -> i32 {
     let rendered = crate::render::render(outcome);
     if !rendered.stdout.is_empty() {
         println!("{}", rendered.stdout.trim_end());

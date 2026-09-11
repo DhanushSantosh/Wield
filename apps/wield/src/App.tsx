@@ -202,14 +202,25 @@ export default function App() {
     const query = state.query.trim();
     let active = true;
     const timer = window.setTimeout(() => {
-      void listTools(query || undefined).then((tools) => {
-        if (!active) return;
-        dispatch({
-          type: "SET_TOOLS",
-          tools: query === "" ? recentTools(tools) : tools,
-          showingRecents: query === "",
+      void listTools(query || undefined)
+        .then((tools) => {
+          if (!active) return;
+          dispatch({
+            type: "SET_TOOLS",
+            tools: query === "" ? recentTools(tools) : tools,
+            showingRecents: query === "",
+          });
+        })
+        .catch(() => {
+          if (!active) {
+            return;
+          }
+          dispatch({
+            type: "SET_TOOLS",
+            tools: [],
+            showingRecents: query === "",
+          });
         });
-      });
     }, 120);
     return () => {
       active = false;

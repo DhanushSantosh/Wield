@@ -1,12 +1,242 @@
-import { render, screen } from "@testing-library/react";
-import { vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeAll, beforeEach, expect, test, vi } from "vitest";
+import type { RunResult, ToolSummary } from "./lib/wield";
+
+const listToolsMock = vi.fn();
+const runToolMock = vi.fn();
+const cancelRunMock = vi.fn();
+const hidePaletteMock = vi.fn();
+
+vi.mock("./lib/wield", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./lib/wield")>();
+  return {
+    ...original,
+    listTools: (...args: unknown[]) => listToolsMock(...args),
+    runTool: (...args: unknown[]) => runToolMock(...args),
+    cancelRun: (...args: unknown[]) => cancelRunMock(...args),
+    hidePalette: (...args: unknown[]) => hidePaletteMock(...args),
+  };
+});
+
+vi.mock("@tauri-apps/plugin-opener", () => ({ revealItemInDir: vi.fn() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
+
 import App from "./App";
 
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn().mockResolvedValue({ name: "Wield", version: "0.1.0" }),
-}));
+const colorTool: ToolSummary = {
+  id: "color.pick",
+  title: "Pick a color",
+  keywords: ["color"],
+  category: "Capture",
+  args: [],
+  available: true,
+  reason: null,
+};
 
-test("renders the Wield heading", async () => {
+const convertTool: ToolSummary = {
+  id: "image.convert",
+  title: "Convert image",
+  keywords: ["image", "convert"],
+  category: "Convert",
+  args: [
+    {
+      name: "format",
+      label: "Format",
+      help: null,
+      arg_type: { Enum: { options: ["png", "webp"] } },
+      default: { Str: "png" },
+      required: true,
+      when: null,
+    },
+  ],
+  available: true,
+  reason: null,
+};
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+const storedValues = new Map<string, string>();
+const storage: Storage = {
+  get length() {
+    return storedValues.size;
+  },
+  clear: () => storedValues.clear(),
+  getItem: (key) => storedValues.get(key) ?? null,
+  key: (index) => [...storedValues.keys()][index] ?? null,
+  removeItem: (key) => {
+    storedValues.delete(key);
+  },
+  setItem: (key, value) => {
+    storedValues.set(key, value);
+  },
+};
+
+beforeAll(() => {
+  Object.defineProperty(window, "localStorage", { configurable: true, value: storage });
+});
+
+beforeEach(() => {
+  listToolsMock.mockReset().mockResolvedValue([colorTool, convertTool]);
+  runToolMock.mockReset();
+  cancelRunMock.mockReset().mockResolvedValue(true);
+  hidePaletteMock.mockReset().mockResolvedValue(undefined);
+  window.localStorage.clear();
+});
+
+test("starts in search and loads the tool list", async () => {
   render(<App />);
-  expect(await screen.findByRole("heading", { name: "Wield" })).toBeInTheDocument();
+  expect(screen.getByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
+  expect(await screen.findByText("Pick a color")).toBeInTheDocument();
+  expect(listToolsMock).toHaveBeenCalledWith(undefined);
+});
+
+test("typing a query renders the backend-ranked results in order", async () => {
+  listToolsMock.mockImplementation((query?: string) =>
+    Promise.resolve(query === "image" ? [convertTool, colorTool] : [colorTool, convertTool]),
+  );
+  render(<App />);
+  await userEvent.type(screen.getByRole("searchbox", { name: "Search tools" }), "image");
+  await waitFor(() => expect(listToolsMock).toHaveBeenLastCalledWith("image"));
+  const rows = screen.getAllByRole("button");
+  expect(rows.map((row) => row.textContent)).toEqual([
+    "Convert imageConvert",
+    "Pick a colorCapture",
+  ]);
+});
+
+test("an available no-argument tool runs immediately and shows its result", async () => {
+  runToolMock.mockResolvedValue({
+    run_id: "run-1",
+    outcome: { Value: { kind: "Text", data: "done" } },
+  });
+  render(<App />);
+  await userEvent.click(await screen.findByText("Pick a color"));
+  expect(runToolMock).toHaveBeenCalledWith(
+    "color.pick",
+    {},
+    expect.any(Function),
+    expect.any(String),
+  );
+  expect(await screen.findByText("done")).toBeInTheDocument();
+});
+
+test("an argument tool opens its form and streams progress before the result", async () => {
+  const run = deferred<RunResult>();
+  runToolMock.mockReturnValue(run.promise);
+  render(<App />);
+  await userEvent.click(await screen.findByText("Convert image"));
+  expect(screen.getByRole("heading", { name: "Convert image" })).toBeInTheDocument();
+  await userEvent.selectOptions(screen.getByLabelText("Format"), "webp");
+  await userEvent.click(screen.getByRole("button", { name: "Convert image" }));
+  const onProgress = runToolMock.mock.calls[0][2] as (progress: unknown) => void;
+  act(() => onProgress({ Message: "Converting…" }));
+  expect(await screen.findByText("Converting…")).toBeInTheDocument();
+  await act(async () =>
+    run.resolve({ run_id: "run-2", outcome: { File: { path: "/tmp/out.webp" } } }),
+  );
+  expect(await screen.findByText("/tmp/out.webp")).toBeInTheDocument();
+});
+
+test("Escape cancels a running tool and waits for Cancelled before returning to search", async () => {
+  const run = deferred<RunResult>();
+  runToolMock.mockReturnValue(run.promise);
+  render(<App />);
+  await userEvent.click(await screen.findByText("Pick a color"));
+  expect(screen.getByLabelText("Tool running")).toBeInTheDocument();
+  fireEvent.keyDown(window, { key: "Escape" });
+  const runId = runToolMock.mock.calls[0][3] as string;
+  expect(cancelRunMock).toHaveBeenCalledWith(runId);
+  expect(screen.getByLabelText("Tool running")).toBeInTheDocument();
+  await act(async () => run.resolve({ run_id: runId, outcome: "Cancelled" }));
+  expect(await screen.findByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
+  expect(screen.queryByLabelText("Tool result")).not.toBeInTheDocument();
+});
+
+test("Retry reruns a failure immediately with the exact same arguments", async () => {
+  runToolMock
+    .mockResolvedValueOnce({
+      run_id: "run-failed",
+      outcome: { Failed: { stage: "Command", detail: "boom", hint: null } },
+    })
+    .mockResolvedValueOnce({
+      run_id: "run-retry",
+      outcome: { File: { path: "/tmp/retried.png" } },
+    });
+  render(<App />);
+  await userEvent.click(await screen.findByText("Convert image"));
+  await userEvent.selectOptions(screen.getByLabelText("Format"), "webp");
+  await userEvent.click(screen.getByRole("button", { name: "Convert image" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
+  expect(screen.queryByRole("heading", { name: "Convert image" })).not.toBeInTheDocument();
+  expect(runToolMock).toHaveBeenNthCalledWith(
+    2,
+    "image.convert",
+    { format: "webp" },
+    expect.any(Function),
+    expect.any(String),
+  );
+  expect(await screen.findByText("/tmp/retried.png")).toBeInTheDocument();
+});
+
+test("Escape steps back from forms and normal results", async () => {
+  render(<App />);
+  await userEvent.click(await screen.findByText("Convert image"));
+  fireEvent.keyDown(screen.getByRole("heading", { name: "Convert image" }), { key: "Escape" });
+  expect(await screen.findByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
+
+  runToolMock.mockResolvedValue({
+    run_id: "run-4",
+    outcome: { Value: { kind: "Text", data: "done" } },
+  });
+  await userEvent.click(screen.getByText("Pick a color"));
+  expect(await screen.findByText("done")).toBeInTheDocument();
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(await screen.findByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
+});
+
+test("Run again retains values and marks the next result for form-style Escape", async () => {
+  runToolMock.mockResolvedValue({
+    run_id: "run-5",
+    outcome: { File: { path: "/tmp/out.webp" } },
+  });
+  render(<App />);
+  await userEvent.click(await screen.findByText("Convert image"));
+  await userEvent.selectOptions(screen.getByLabelText("Format"), "webp");
+  await userEvent.click(screen.getByRole("button", { name: "Convert image" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Run again" }));
+  expect(screen.getByLabelText("Format")).toHaveValue("webp");
+  await userEvent.click(screen.getByRole("button", { name: "Convert image" }));
+  expect(await screen.findByText("/tmp/out.webp")).toBeInTheDocument();
+  expect(runToolMock).toHaveBeenCalledTimes(2);
+  fireEvent.keyDown(window, { key: "Escape" });
+  await waitFor(() => expect(screen.getByLabelText("Format")).toHaveValue("webp"));
+});
+
+test("an unavailable selected row shows its reason and Enter does nothing", async () => {
+  const unavailable = {
+    ...convertTool,
+    available: false,
+    reason: "ImageMagick is not installed",
+  };
+  listToolsMock.mockResolvedValue([unavailable]);
+  render(<App />);
+  expect(await screen.findByText("ImageMagick is not installed")).toBeInTheDocument();
+  fireEvent.keyDown(window, { key: "Enter" });
+  expect(runToolMock).not.toHaveBeenCalled();
+  expect(screen.getByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
+});
+
+test("top-level Escape and window blur hide the palette", async () => {
+  render(<App />);
+  await screen.findByText("Pick a color");
+  fireEvent.keyDown(window, { key: "Escape" });
+  fireEvent(window, new Event("blur"));
+  expect(hidePaletteMock).toHaveBeenCalledTimes(2);
 });

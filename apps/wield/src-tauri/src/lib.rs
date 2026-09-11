@@ -9,7 +9,9 @@ pub mod commands;
 pub mod instance;
 mod logging;
 pub mod palette;
+pub mod preferences;
 pub mod state;
+pub mod tray;
 
 #[cfg(test)]
 mod test_support;
@@ -152,17 +154,66 @@ pub fn run() {
             commands::quit
         ])
         .setup(move |app| {
-            setup_shell.bind(app.handle().clone());
+            let handle = app.handle().clone();
+            setup_shell.bind(handle.clone());
+
+            // Closing either window hides it instead of destroying it — the
+            // palette must stay warm, and Preferences has no reason to be
+            // recreated either.
+            for label in [palette::LABEL, preferences::LABEL] {
+                if let Some(window) = app.get_webview_window(label) {
+                    let window_clone = window.clone();
+                    window.on_window_event(move |event| {
+                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                            api.prevent_close();
+                            let _ = window_clone.hide();
+                        }
+                    });
+                }
+            }
+
+            // Tray icon + menu, built from the current tool list. Logs (does
+            // not fail startup) if no SNI host is present.
+            let tools = commands::list_tools_impl(&handle.state::<state::AppState>());
+            if let Err(error) = tray::build(&handle, &tools) {
+                tracing::warn!(%error, "failed to build tray icon");
+            }
+
+            // GlobalShortcuts: bind "show palette" to <Super>w. ashpd 0.13 has
+            // no session-restore token for this portal, so the desktop
+            // environment's confirmation dialog reappears every launch — see
+            // docs/testing.md. Never blocks startup either way.
+            let hotkey_app = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                let show_app = hotkey_app.clone();
+                let outcome = wield_portal::global_shortcuts::bind_show_palette(move || {
+                    palette::show(&show_app);
+                })
+                .await;
+                let hotkey_state = match outcome {
+                    wield_portal::global_shortcuts::BindOutcome::Bound => {
+                        state::HotkeyState::Registered
+                    }
+                    wield_portal::global_shortcuts::BindOutcome::Unavailable {
+                        fallback_command,
+                    } => state::HotkeyState::Unavailable { fallback_command },
+                };
+                hotkey_app
+                    .state::<state::AppState>()
+                    .set_hotkey_state(hotkey_state);
+            });
+
             tracing::info!("wield shell ready (headless)");
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("build wield shell");
 
-    app.run(|_app, event| {
-        if let tauri::RunEvent::ExitRequested { api, .. } = event {
-            api.prevent_exit();
-        }
-    });
+    // Windows hide instead of closing (see `setup`); the only real exit path
+    // is the `quit` command / tray "Quit" item calling `AppHandle::exit`.
+    // Verified manually (Task 6): this does not need an `ExitRequested`
+    // guard against the installed Tauri version — `quit` terminates the
+    // process directly.
+    app.run(|_app, _event| {});
     drop(instance_connection);
 }

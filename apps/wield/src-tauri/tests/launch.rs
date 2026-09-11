@@ -19,15 +19,25 @@ fn shell_launches_headless_and_owns_the_bus_name() {
     let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_wield-app"))
         .spawn()
         .unwrap();
-    std::thread::sleep(std::time::Duration::from_secs(3));
 
-    let owned = std::process::Command::new("busctl")
-        .args(["--user", "list"])
-        .output()
-        .map(|output| {
-            String::from_utf8_lossy(&output.stdout).contains("io.github.DhanushSantosh.Wield")
-        })
-        .unwrap_or(false);
+    // Poll rather than a fixed sleep: under a loaded runner (right after a big
+    // recompile) the shell can take longer than a few seconds to acquire the
+    // bus name, so a flat sleep flakes. Give it up to 15s, checking often.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    let mut owned = false;
+    while std::time::Instant::now() < deadline {
+        owned = std::process::Command::new("busctl")
+            .args(["--user", "list"])
+            .output()
+            .map(|output| {
+                String::from_utf8_lossy(&output.stdout).contains("io.github.DhanushSantosh.Wield")
+            })
+            .unwrap_or(false);
+        if owned {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
 
     let _ = child.kill();
     let _ = child.wait();

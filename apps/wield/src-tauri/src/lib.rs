@@ -1,6 +1,8 @@
 use serde::Serialize;
 
 mod logging;
+pub mod capabilities;
+pub mod commands;
 pub mod state;
 
 #[derive(Serialize)]
@@ -20,7 +22,7 @@ fn app_info() -> AppInfo {
 pub fn run() {
     let _guard = logging::init();
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info])
+        .invoke_handler(tauri::generate_handler![app_info, commands::capabilities])
         .run(tauri::generate_context!())
         .expect("error while running Wield");
 }

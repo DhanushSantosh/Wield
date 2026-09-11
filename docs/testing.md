@@ -158,7 +158,16 @@ Two things were tried:
 Never reproduced locally in this dev sandbox, in either failing or fixed
 form, across 15 stress-test runs — consistent with this being specific to
 the shared, contended CI runner environment, not a local reproduction path.
-If `--test-threads=1` turns out not to fully resolve it either, the next
-step is a real root-cause investigation of `CommandRunner`'s `tokio::select!`
-race in `crates/wield-core/src/command.rs` against process-reaping behavior
+
+**Confirms the diagnosis:** `ci.yml`'s own `cargo test --workspace --
+--test-threads=1` step passed clean on the very next run, but that same
+run's `npm run check` step — which runs `cargo test` a *second* time via
+`scripts/run-cargo.js` (root `package.json`'s `test` script), a separate,
+un-serialized invocation this fix hadn't reached yet — flaked on
+`cancels_promptly` instead (same file, same family, different specific
+test). Fixed by adding `-- --test-threads=1` to both `package.json` script
+definitions (`test` and `cargo:test`) that shell out to cargo, not just
+`ci.yml`'s own direct step. If it recurs a third way, the next step is a
+real root-cause investigation of `CommandRunner`'s `tokio::select!` race in
+`crates/wield-core/src/command.rs` against process-reaping behavior
 specifically, not another blind mitigation attempt.

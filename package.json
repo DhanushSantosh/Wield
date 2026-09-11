@@ -9,9 +9,9 @@
     "build:app:ui": "npm run build:ui -w apps/wield",
     "lint": "npm run lint -w apps/wield",
     "typecheck": "npm run typecheck -w apps/wield",
-    "test": "npm run test -w apps/wield && node scripts/run-cargo.js test",
+    "test": "npm run test -w apps/wield && node scripts/run-cargo.js test -- --test-threads=1",
     "check": "npm run lint && npm run typecheck && npm run test",
-    "cargo:test": "node scripts/run-cargo.js test"
+    "cargo:test": "node scripts/run-cargo.js test -- --test-threads=1"
   },
   "engines": { "node": ">=20.0.0", "npm": ">=10.0.0" },
   "devDependencies": {

@@ -26,7 +26,8 @@ pub fn run() {
             app_info,
             commands::capabilities,
             commands::list_tools,
-            commands::run_tool
+            commands::run_tool,
+            commands::cancel
         ])
         .run(tauri::generate_context!())
         .expect("error while running Wield");

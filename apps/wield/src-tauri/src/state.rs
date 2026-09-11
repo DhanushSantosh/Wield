@@ -78,6 +78,16 @@ impl AppState {
             runs: Mutex::new(HashMap::new()),
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn in_flight_ids(&self) -> Vec<RunId> {
+        self.runs
+            .lock()
+            .expect("runs lock")
+            .keys()
+            .cloned()
+            .collect()
+    }
 }
 
 #[cfg(test)]

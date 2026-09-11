@@ -147,6 +147,11 @@ pub async fn run_tool(
     run_tool_impl(&state, &id, &args).await
 }
 
+#[tauri::command]
+pub fn cancel(state: tauri::State<'_, AppState>, run_id: crate::state::RunId) -> bool {
+    state.cancel_run(&run_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,5 +198,37 @@ mod tests {
             &serde_json::json!({ "bogus": 1 }),
         )
         .is_err());
+    }
+
+    #[tokio::test]
+    async fn cancel_stops_an_in_flight_run() {
+        let directory = tempfile::tempdir().unwrap();
+        write_stub(
+            directory.path(),
+            "#!/bin/sh\nsleep 5\nlast=\"\"\nfor arg in \"$@\"; do last=\"$arg\"; done\ncat \"$1\" > \"$last\"\n",
+        );
+        let input = directory.path().join("in.png");
+        std::fs::write(&input, b"IMG").unwrap();
+        let state = std::sync::Arc::new(
+            AppState::for_test(
+                wield_tools::builtin_registry(),
+                wield_core::BinaryResolver::with_dirs(vec![directory.path().to_path_buf()]),
+            )
+            .await,
+        );
+        let args = serde_json::json!({ "input": input.to_string_lossy(), "format": "png" });
+        let run_state = state.clone();
+        let run = tokio::spawn(async move {
+            run_tool_impl(&run_state, "image.convert", &args)
+                .await
+                .unwrap()
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        let ids = state.in_flight_ids();
+        assert_eq!(ids.len(), 1);
+        assert!(state.cancel_run(&ids[0]));
+        let result = run.await.unwrap();
+        assert!(matches!(result.outcome, ToolOutcome::Cancelled));
     }
 }

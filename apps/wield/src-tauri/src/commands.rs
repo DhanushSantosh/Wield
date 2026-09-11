@@ -106,6 +106,7 @@ pub async fn run_tool_impl(
     state: &AppState,
     id: &str,
     args: &serde_json::Value,
+    mut on_progress: impl FnMut(wield_core::Progress) + Send + 'static,
 ) -> Result<RunResult, String> {
     let descriptor = state
         .registry
@@ -116,14 +117,18 @@ pub async fn run_tool_impl(
     let run_id = crate::state::RunId::new();
     let token = CancellationToken::new();
     state.register_run(run_id.clone(), token.clone());
-    let (progress, mut progress_rx) = tokio::sync::mpsc::channel(16);
-    let drain = tokio::spawn(async move { while progress_rx.recv().await.is_some() {} });
+    let (progress, mut progress_rx) = tokio::sync::mpsc::channel(32);
+    let forward = tokio::spawn(async move {
+        while let Some(progress) = progress_rx.recv().await {
+            on_progress(progress);
+        }
+    });
     let started = std::time::Instant::now();
     let outcome = state
         .executor
         .run(ExecutionRequest { descriptor, args }, progress, token)
         .await;
-    let _ = drain.await;
+    let _ = forward.await;
     state.take_run(&run_id);
     tracing::info!(
         tool_id = id,
@@ -139,8 +144,12 @@ pub async fn run_tool(
     state: tauri::State<'_, AppState>,
     id: String,
     args: serde_json::Value,
+    progress: tauri::ipc::Channel<wield_core::Progress>,
 ) -> Result<RunResult, String> {
-    run_tool_impl(&state, &id, &args).await
+    run_tool_impl(&state, &id, &args, move |event| {
+        let _ = progress.send(event);
+    })
+    .await
 }
 
 #[tauri::command]
@@ -226,12 +235,44 @@ mod tests {
         )
         .await;
         let args = serde_json::json!({ "input": input.to_string_lossy(), "format": "png" });
-        let result = run_tool_impl(&state, "image.convert", &args).await.unwrap();
+        let result = run_tool_impl(&state, "image.convert", &args, |_| {})
+            .await
+            .unwrap();
         assert!(matches!(
             result.outcome,
             wield_core::ToolOutcome::File { .. }
         ));
         assert!(state.take_run(&result.run_id).is_none());
+    }
+
+    #[tokio::test]
+    async fn run_tool_forwards_progress_before_the_final_outcome() {
+        let directory = tempfile::tempdir().unwrap();
+        write_stub(
+            directory.path(),
+            "#!/bin/sh\nlast=\"\"\nfor arg in \"$@\"; do last=\"$arg\"; done\ncat \"$1\" > \"$last\"\n",
+        );
+        let input = directory.path().join("in.png");
+        std::fs::write(&input, b"IMG").unwrap();
+        let state = AppState::for_test(
+            wield_tools::builtin_registry(),
+            wield_core::BinaryResolver::with_dirs(vec![directory.path().to_path_buf()]),
+        )
+        .await;
+        let args = serde_json::json!({ "input": input.to_string_lossy(), "format": "png" });
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen_clone = seen.clone();
+
+        let result = run_tool_impl(&state, "image.convert", &args, move |progress| {
+            seen_clone.lock().unwrap().push(progress);
+        })
+        .await
+        .unwrap();
+
+        assert!(matches!(result.outcome, ToolOutcome::File { .. }));
+        let events = seen.lock().unwrap();
+        assert!(events.contains(&wield_core::Progress::Started));
+        assert!(events.contains(&wield_core::Progress::Finished));
     }
 
     #[tokio::test]
@@ -263,7 +304,7 @@ mod tests {
         let args = serde_json::json!({ "input": input.to_string_lossy(), "format": "png" });
         let run_state = state.clone();
         let run = tokio::spawn(async move {
-            run_tool_impl(&run_state, "image.convert", &args)
+            run_tool_impl(&run_state, "image.convert", &args, |_| {})
                 .await
                 .unwrap()
         });

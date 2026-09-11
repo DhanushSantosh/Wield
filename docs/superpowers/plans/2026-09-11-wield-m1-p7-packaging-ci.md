@@ -70,7 +70,7 @@ Four scope decisions, made with the owner before writing this plan:
 
 **Interfaces:** none (infrastructure only) — no code changes to test.
 
-- [ ] **Step 1: Write the workflow**
+- [x] **Step 1: Write the workflow**
 
 ```yaml
 name: CI
@@ -122,7 +122,7 @@ jobs:
       - run: npm run check
 ```
 
-- [ ] **Step 2: Verify — push and watch it run**
+- [x] **Step 2: Verify — push and watch it run**
 
 ```bash
 git checkout -b feat/p7-packaging-ci
@@ -133,7 +133,7 @@ gh run watch --exit-status
 ```
 Expected: the run appears (triggered by the push, since GitHub Actions picks up new workflow files immediately once pushed on any branch — this doesn't need a PR open) and finishes green. If it fails, read the log (`gh run view --log-failed`), fix, push again — treat any failure here as a real bug to fix, not a plan defect, since every command in the workflow already passes locally on this exact worktree.
 
-- [ ] **Step 3: Commit** (already done as part of Step 2 — this step exists only if Step 2 required fix-up commits; squash or leave as separate commits, whichever is cleaner)
+- [x] **Step 3: Commit** (already done as part of Step 2 — this step exists only if Step 2 required fix-up commits; squash or leave as separate commits, whichever is cleaner)
 
 ---
 
@@ -146,7 +146,7 @@ Expected: the run appears (triggered by the push, since GitHub Actions picks up 
 - Consumes: `instance::BUS_NAME` = `"io.github.DhanushSantosh.Wield"`, `instance::OBJECT_PATH` = `"/io/github/DhanushSantosh/Wield"` (both `pub const` in `apps/wield/src-tauri/src/instance.rs`) — the D-Bus object exposes `async fn run_tool(id: &str, args_json: &str) -> String`, returning `serde_json::to_string(&ToolOutcome)`. `wield_core::ToolOutcome::File { path: PathBuf }` is the success variant, externally tagged as `{"File":{"path":"..."}}`.
 - Uses `assets/icon.png` (already committed, a valid PNG) as the fixture input — no new binary test asset needed.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `apps/wield/src-tauri/tests/launch.rs`:
 
@@ -243,7 +243,7 @@ fn wield_run_tool_over_dbus(id: &str, args_json: &str) -> String {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails or is skipped honestly**
+- [x] **Step 2: Run to verify it fails or is skipped honestly**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -251,7 +251,7 @@ cargo test -p wield-app --test launch -- --ignored run_tool_converts_a_real_fixt
 ```
 Expected: in this sandbox (no `magick` on `$PATH` — confirmed earlier in this session that ImageMagick isn't bundled/installed here), the test prints `skipping: magick unavailable` and passes trivially. That's correct, honest behavior for this environment, not a false green — the real assertion only runs where `magick` is present (this repo's own CI, once Task 3 installs it). If `magick` *is* present locally, it should genuinely run and pass since `image.convert`'s Command path is already implemented and tested (P4).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add apps/wield/src-tauri/tests/launch.rs
@@ -267,7 +267,7 @@ git commit -m "test(e2e): RunTool converts a real fixture over D-Bus end to end"
 
 **Interfaces:** none new — runs Task 2's test with `magick` actually present, so it exercises the real assertion path this time.
 
-- [ ] **Step 1: Add the E2E job**
+- [x] **Step 1: Add the E2E job**
 
 Append a second job to `.github/workflows/ci.yml` (same file, after `test:`):
 
@@ -309,7 +309,7 @@ Append a second job to `.github/workflows/ci.yml` (same file, after `test:`):
 
 `--test-threads=1`: both `--ignored` tests in `launch.rs` spawn a real `wield-app` process and race for the same single-instance D-Bus name — running them serially avoids the two tests fighting over it.
 
-- [ ] **Step 2: Verify — push and watch both jobs**
+- [x] **Step 2: Verify — push and watch both jobs**
 
 ```bash
 git add .github/workflows/ci.yml
@@ -319,7 +319,7 @@ gh run watch --exit-status
 ```
 Expected: both `test` and `e2e-smoke` jobs green, and this time `run_tool_converts_a_real_fixture_end_to_end` should actually run its real assertions (`magick` is now on `$PATH` via `apt-get install imagemagick`) rather than skip — check the job log for the `skipping: magick unavailable` line's *absence* to confirm this, not just a green checkmark (a skip and a real pass both look green).
 
-- [ ] **Step 3: Commit** (folded into Step 2 above if no fixes were needed)
+- [x] **Step 3: Commit** (folded into Step 2 above if no fixes were needed)
 
 ---
 
@@ -332,7 +332,7 @@ Expected: both `test` and `e2e-smoke` jobs green, and this time `run_tool_conver
 
 **Interfaces:** none (packaging config, no Rust/TS code) — this task's "test" is generating real, well-formed vendored-sources files and a manifest that at least parses as valid YAML; the actual `flatpak-builder` build is verified in Task 6 (CI-only, per the GEON amendment).
 
-- [ ] **Step 1: Generate the vendored cargo sources**
+- [x] **Step 1: Generate the vendored cargo sources**
 
 ```bash
 cd /home/dhanush/Projects/Wield
@@ -342,7 +342,7 @@ python3 /tmp/flatpak-cargo-generator.py Cargo.lock -o packaging/flatpak/cargo-so
 ```
 Expected: `packaging/flatpak/cargo-sources.json` exists and is well-formed JSON (`python3 -c "import json; json.load(open('packaging/flatpak/cargo-sources.json'))"` exits 0) with a nonzero number of entries (one per vendored crate).
 
-- [ ] **Step 2: Generate the vendored npm sources**
+- [x] **Step 2: Generate the vendored npm sources**
 
 ```bash
 pip install --user flatpak-node-generator
@@ -350,7 +350,7 @@ python3 -m flatpak_node_generator --no-requests-cache -o packaging/flatpak/node-
 ```
 Expected: same well-formed-JSON check. **Mechanical-correction note:** if `pip install flatpak-node-generator` fails to resolve (package renamed/moved), fall back to cloning `flatpak/flatpak-builder-tools` and running `node/flatpak-node-generator.py` directly — both are documented entry points to the same tool.
 
-- [ ] **Step 3: Write the manifest**
+- [x] **Step 3: Write the manifest**
 
 ```yaml
 app-id: io.github.DhanushSantosh.Wield
@@ -412,7 +412,7 @@ modules:
 - `npm run tauri build -w apps/wield -- -b deb --offline`: confirm this is the right invocation for this repo's actual root `package.json` script wiring (whether `tauri` needs `-w apps/wield` from the root, or must run from inside `apps/wield`) — adjust if the real command differs; note the correction in the Task 10 report.
 - `--offline` on `npm run tauri build`: Tauri's build step itself doesn't take npm flags directly — this may need to become `npm run build -w apps/wield --offline` (the Vite build) followed by a separate `cargo tauri build --offline` or equivalent inside `apps/wield/src-tauri`. Resolve against whatever actually runs in this repo's `apps/wield/package.json` `build` script and adjust; the goal (build the frontend + Tauri binary fully offline from the vendored sources) is fixed, the exact command isn't.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packaging/flatpak/
@@ -428,7 +428,7 @@ git commit -m "feat(packaging): Flatpak manifest, vendored cargo/npm sources"
 
 **Interfaces:** consumed by Task 4's manifest (`install -Dm644 ... metainfo.xml ...`) and by Flathub review (Task 8).
 
-- [ ] **Step 1: Write it**
+- [x] **Step 1: Write it**
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -473,14 +473,14 @@ git commit -m "feat(packaging): Flatpak manifest, vendored cargo/npm sources"
 
 No `<screenshots>` block — deliberately omitted rather than filled with a placeholder image (AppStream doesn't require one; Flathub review strongly prefers at least one, so this is expected to come back as a review request, tracked alongside the icon in `docs/packaging.md`, Task 7).
 
-- [ ] **Step 2: Validate it's well-formed XML**
+- [x] **Step 2: Validate it's well-formed XML**
 
 ```bash
 python3 -c "import xml.dom.minidom; xml.dom.minidom.parse('packaging/flatpak/io.github.DhanushSantosh.Wield.metainfo.xml')"
 ```
 Expected: exits 0, no exception.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add packaging/flatpak/io.github.DhanushSantosh.Wield.metainfo.xml
@@ -496,7 +496,7 @@ git commit -m "feat(packaging): AppStream MetaInfo"
 
 **Interfaces:** builds Task 4's manifest; this is where the manifest's real correctness (Task 4's mechanical-correction notes) actually gets resolved against reality.
 
-- [ ] **Step 1: Write the workflow**
+- [x] **Step 1: Write the workflow**
 
 ```yaml
 name: Release
@@ -532,7 +532,7 @@ jobs:
 
 **Mechanical-correction note:** the `bilelmoussaoui/flatpak-github-actions:gnome-47` container image tag is a well-known, actively maintained community image for exactly this job (the `flatpak/flatpak-github-actions` action's own docs recommend it) — but it pins GNOME 47, one version behind this plan's runtime-version 50. Check at execution time whether a `gnome-50`-tagged image exists; if not, either the manifest's `runtime-version` or the container tag needs to move to whichever version the image actually provides — note which way it was resolved in the Task 10 report. The `--lint-manifest`/`--lint-appstream` flags on `org.flatpak.Builder` are the actual `flatpak-builder-lint` tool's interface as of writing; if the invocation has changed, adapt and note it. `|| true` on the lint steps: a first-pass lint against a deliberately minimal, no-screenshots submission (Task 5) is expected to report real, known warnings (icon, screenshots) — the step should still print them (for Task 8's submission-readiness read), not fail the job over already-known, already-tracked gaps.
 
-- [ ] **Step 2: Verify — push a disposable pre-release tag and watch it**
+- [x] **Step 2: Verify — push a disposable pre-release tag and watch it**
 
 ```bash
 git tag v0.1.0-p7-smoke
@@ -546,7 +546,7 @@ git push origin :refs/tags/v0.1.0-p7-smoke
 git tag -d v0.1.0-p7-smoke
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/release.yml
@@ -562,7 +562,7 @@ git commit -m "ci: build and lint the Flatpak on version tags"
 
 **Interfaces:** none — documentation only.
 
-- [ ] **Step 1: Write it**
+- [x] **Step 1: Write it**
 
 ```markdown
 # Packaging Wield
@@ -591,7 +591,7 @@ git commit -m "ci: build and lint the Flatpak on version tags"
 See `docs/superpowers/plans/2026-09-11-wield-m1-p7-packaging-ci.md` Task 8 for the submission record (PR link once opened, or the reason it wasn't if execution stopped at the confirmation gate).
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add docs/packaging.md
@@ -694,7 +694,7 @@ Expected: `contexts` includes `"test"`.
 
 ## Task 10: Workspace green + P7 wrap-up
 
-- [ ] **Step 1: Full local checks** (everything not gated behind CI-only Flatpak tooling)
+- [x] **Step 1: Full local checks** (everything not gated behind CI-only Flatpak tooling)
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -707,7 +707,7 @@ python3 -c "import json; json.load(open('packaging/flatpak/cargo-sources.json'))
 ```
 Expected: PASS. (Same as every prior plan's wrap-up gate — the Rust/frontend code itself is untouched by this plan, confirming no regression, plus the two new file-validity checks this plan actually adds content for.)
 
-- [ ] **Step 2: Confirm both CI workflows are green on the branch**
+- [x] **Step 2: Confirm both CI workflows are green on the branch**
 
 ```bash
 gh run list --branch feat/p7-packaging-ci --limit 5
@@ -749,3 +749,25 @@ Then open the PR (if GEON is executing this directly, matching the P1/P4/P5b/P6b
 **Type consistency:** Task 2's test uses `instance::BUS_NAME`/`OBJECT_PATH` and the `run_tool(id, args_json) -> String` signature exactly as defined in `apps/wield/src-tauri/src/instance.rs` (read directly while writing this plan, not guessed) and the same `{"input": ..., "format": ...}` args shape already proven correct by `commands.rs`'s own `run_tool_runs_a_command_tool_against_a_stub` test.
 
 **Ordering:** 1 (independent) → 2 (independent, needs only existing code) → 3 (needs 2's test to exist) → 4–5 (independent of 1–3, needs nothing but the repo's existing `Cargo.lock`/`package-lock.json`) → 6 (needs 4, 5) → 7 (needs 4–6's real outcomes to document accurately) → 8 (needs 4–7, hard-gated) → 9 (needs 1, 3 green at least once) → 10. Consistent.
+
+---
+
+## Execution report
+
+SUNIO executed Tasks 1–7 on `feat/p7-packaging-ci`, iterating through the Task 6 "push a disposable tag and watch it" verification loop for real (13 commits, several `fix(...)` commits from that loop), then hit its usage limit mid-iteration — the Release workflow was still red at that point (4 straight failed attempts on `v0.1.0-p7-smoke`), no report posted to GEON's inbox. Owner asked GEON to continue; GEON picked up from the branch's actual state (not from any status report — none existed) by reading the real CI/Release run logs directly.
+
+**SUNIO's real, correct deviations from the plan's literal text** (all legitimate, none reverted):
+- Built via `npm run build -w apps/wield -- --no-bundle --ci` + direct binary/desktop-file/icon install, instead of the plan's `tauri build -b deb` + extract-from-.deb approach — Tauri's Debian bundler probes for a host AppIndicator package the GNOME SDK doesn't provide, even though Wield's tray support loads dynamically at runtime. Hand-authored the `.desktop` file and a 512×512 icon export instead of extracting them. Cleaner than the plan's guess.
+- `ci.yml` triggers on `push:` (any branch) + `workflow_dispatch`, not just `push: branches: [master]` as literally written in Task 1 — a real gap in the plan itself: Task 1's own Step 2 verification pushes to a feature branch, which would never have triggered a master-only workflow. Correct fix to a plan bug, not a deviation to flag as a problem.
+- `ghcr.io/flathub-infra/flatpak-github-actions:gnome-50` as the lint container image (matching the manifest's runtime-version exactly) instead of the plan's guessed `bilelmoussaoui/...gnome-47` tag, and `flatpak run --command=flatpak-builder-lint org.flatpak.Builder <subcommand> <path>` as the real lint invocation shape instead of the plan's guessed `--lint-manifest`/`--lint-appstream` flags. Both are the plan's own flagged "mechanical-correction" unknowns, resolved correctly against reality.
+- `flatpak-node-generator` needed a real workaround for two issues found in practice: (1) the primary dev environment is PEP 668 externally-managed, so generation ran in a scratch virtualenv rather than a system-wide `pip install`; (2) v0.1.1 treats already-installed local packages as sources and produces an incomplete offline cache unless run against a clean checkout (or with `node_modules` moved aside). Documented in `docs/packaging.md`.
+- Two real Rust-side fixes landed (`770636c`), touching `crates/wield-cli/src/lib.rs` and `crates/wield-core/tests/command_runner.rs`, despite this plan's own Global Constraints implying the Rust side would stay untouched. Both are legitimate, narrowly-scoped bug fixes for real environment-specific flakiness surfaced only once this plan's new CI infrastructure existed to exercise it: (1) `wield-cli::run()` now validates args *before* the async portal probe, so invalid-input calls fail fast instead of always paying for a D-Bus round trip (also fixes a source of CI-only hangs when no portal service is reachable); (2) `command_runner.rs`'s `nonzero_exit_reports_stderr_tail_and_cleans_temp` test now execs `/bin/sh -c "<script>"` directly instead of writing a temp file and chmod+exec'ing it — the write-then-exec pattern raced on the GitHub Actions runner's filesystem. GEON reviewed both diffs directly; correct, minimal, necessary. Global Constraints' "Rust untouched" was a description of the expected outcome given already-working code, not a rule forbidding a real fix a new CI surface uncovered — same judgment call this project has made every time so far (P5a's exit-prevention bug, P2's borrow-checker bugs).
+
+**GEON's continuation, after SUNIO's limit:**
+- Diagnosed the Release workflow's actual failure via `gh run view --log-failed`: `flatpak-builder-lint` flagged `finish-args-unnecessary-appid-own-name` and `finish-args-portal-talk-name` as errors. Researched via Flathub's own linter source/docs (not guessed): portal interfaces (`org.freedesktop.portal.*`) are reachable from inside a Flatpak sandbox without an explicit `talk-name` grant — that exception "is never granted" per the linter's own exceptions list, meaning it's always considered a mistake to keep, not something to except — and an app's own D-Bus name is granted by default. **Dropped both from `finish-args`** (`8929493`) and amended the design spec's §9 to match, since the original spec had both listed as required. This is a real correction to a previously-locked spec block, not a plan bug — the spec was written before this project had ever actually run a real Flathub linter against a manifest.
+- Fixed the Task 6 lint step to tolerate exactly two already-known, already-tracked findings (`metainfo-missing-screenshots`, `appstream-screenshots-not-mirrored-in-ostree` — the placeholder-icon/no-screenshots gap named since Task 5 was written) while still failing on anything else, rather than a blanket `|| true` that would silently swallow a real future regression (`3a5b160`). First draft used bash process substitution (`<(...)`); caught during local testing that the container's default shell for `run:` steps is `sh` (confirmed in an earlier failing run's log: `shell: sh -e {0}`), not `bash` — rewrote using temp files instead of process substitution so it runs correctly under strict POSIX `sh`. Verified the exact extracted shell function against three fixture cases (only-known-findings passes, clean passes, one unexpected finding fails) before pushing, rather than round-tripping through CI to find shell portability bugs.
+- Iterated the disposable-tag verification loop three more times (`v0.1.0-p7-smoke2`, `-smoke3`) exactly as Task 6 Step 2 describes, deleting each after use; the Release workflow is now genuinely green (run `34625299334`), not just "probably fine." CI (`ci.yml`) confirmed green at the final HEAD too (run `34626386042`).
+- Observed one CI-only test flake (`wield-core::command_runner::kills_on_timeout`, on the intermediate `8929493` run) — the exact class of pre-existing, load-sensitive flake this project's own history already anticipated needing "P7 CI tuning" for (see `docs/testing.md`'s P5a section). Passed clean on the very next push. Not chased into a fix here, consistent with this plan's own promise that the Rust side stays untouched apart from SUNIO's two already-justified fixes above — flagged here for visibility, not silently absorbed.
+- Full local re-verification: `cargo fmt --all` (no diff), `cargo clippy --workspace --all-targets -D warnings` (clean), `cargo test --workspace` (all green, 0 failed), `npm run check` (20 files / 70 tests, clean), both new file-validity checks (metainfo XML, both vendored-sources JSON files) — all pass.
+
+**Tasks 8 and 9 are deliberately NOT executed by GEON in this continuation.** Both are hard/soft-gated on a fresh, explicit, real-time confirmation per this plan's own GEON amendment (items 5 and the Task 9 note) — "continue the plan" is authorization to keep doing the work, not the specific per-action go-ahead either gate requires. Everything through Task 7 stands on its own as a complete, working, CI-verified pipeline regardless of whether 8/9 ever run. Asking the owner explicitly for each, separately, before touching either.

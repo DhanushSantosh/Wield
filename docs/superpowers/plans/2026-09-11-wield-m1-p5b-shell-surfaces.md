@@ -12,6 +12,30 @@
 
 ---
 
+## Status: COMPLETE — 2026-09-11 (branch `feat/p5b-shell-surfaces`, 8 commits)
+
+Executed by GEON. `cargo test --workspace` + `cargo clippy --workspace --all-targets
+-D warnings` + `cargo fmt --all --check` + `npm run check` all green; the ignored
+launch smoke test passes; a manual launch confirmed headless + bus ownership + a
+working tray (SNI host found) + a successful `GlobalShortcuts` bind (no
+`Unavailable` warning logged) in this environment. See `docs/testing.md` for the
+full account, including two things that were **not** independently verified here
+for lack of an interactive session: an actual tray-icon click, and the Quit menu
+item terminating the process (the `AppHandle::exit` contract is documented and
+trusted, not click-tested).
+
+**Deviations from the plan (all minor):** `build_menu` is generic over
+`tauri::Runtime` (not hardcoded to `Wry`) so it is testable against
+`tauri::test::MockRuntime` directly — no `MenuPlan` indirection needed, since
+`Menu`/`Submenu::items()` + `MenuItemKind::id()` gave enough introspection.
+`FALLBACK_COMMAND` is `"wield-app"` (relaunching the shell binary, which the
+single-instance guard turns into a `ShowPalette` relay) rather than a
+nonexistent `wield palette` CLI verb — `wield-cli` has no such subcommand.
+Tasks 4 and 5 were implemented in dependency order (Preferences window before
+the tray that calls into it) rather than the plan's listed order.
+
+---
+
 ## GEON amendment — 2026-09-11 (grounded in the installed dependency versions)
 
 Checked against what's actually resolved in this workspace before writing this plan:

@@ -21,12 +21,27 @@ impl Default for RunId {
     }
 }
 
+/// Whether the `GlobalShortcuts` portal binding succeeded, and if not, what
+/// to tell the user to bind by hand in their desktop environment.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "state")]
+pub enum HotkeyState {
+    /// The bind attempt hasn't completed yet (briefly, at startup).
+    Pending,
+    /// The shortcut is bound; activating it shows the palette.
+    Registered,
+    /// The portal is absent or binding failed. `fallback_command` is a
+    /// working, copyable command the user can bind themselves.
+    Unavailable { fallback_command: String },
+}
+
 /// Registry, executor, capability data, and cancellation state held by Tauri.
 pub struct AppState {
     pub registry: Registry,
     pub executor: Executor,
     pub availability: AvailabilityView,
     runs: Mutex<HashMap<RunId, CancellationToken>>,
+    hotkey: Mutex<HotkeyState>,
 }
 
 impl AppState {
@@ -44,7 +59,16 @@ impl AppState {
             executor,
             availability,
             runs: Mutex::new(HashMap::new()),
+            hotkey: Mutex::new(HotkeyState::Pending),
         }
+    }
+
+    pub fn hotkey_state(&self) -> HotkeyState {
+        self.hotkey.lock().expect("hotkey lock").clone()
+    }
+
+    pub fn set_hotkey_state(&self, state: HotkeyState) {
+        *self.hotkey.lock().expect("hotkey lock") = state;
     }
 
     pub fn register_run(&self, id: RunId, token: CancellationToken) {
@@ -76,6 +100,7 @@ impl AppState {
             executor,
             availability,
             runs: Mutex::new(HashMap::new()),
+            hotkey: Mutex::new(HotkeyState::Pending),
         }
     }
 
@@ -102,14 +127,19 @@ mod tests {
         assert!(state.registry.get("color.pick").is_some());
     }
 
-    #[test]
-    fn cancel_run_toggles_a_registered_token() {
-        let state = AppState {
+    fn empty_state() -> AppState {
+        AppState {
             registry: wield_core::Registry::new(),
             executor: wield_core::Executor::new(wield_core::BinaryResolver::from_env()),
             availability: Default::default(),
             runs: std::sync::Mutex::new(std::collections::HashMap::new()),
-        };
+            hotkey: std::sync::Mutex::new(HotkeyState::Pending),
+        }
+    }
+
+    #[test]
+    fn cancel_run_toggles_a_registered_token() {
+        let state = empty_state();
         let id = RunId::new();
         let token = CancellationToken::new();
         state.register_run(id.clone(), token.clone());
@@ -117,5 +147,22 @@ mod tests {
         assert!(token.is_cancelled());
         assert!(state.take_run(&id).is_some());
         assert!(!state.cancel_run(&RunId::new()));
+    }
+
+    #[test]
+    fn hotkey_state_defaults_pending_and_is_settable() {
+        let state = empty_state();
+        assert_eq!(state.hotkey_state(), HotkeyState::Pending);
+        state.set_hotkey_state(HotkeyState::Registered);
+        assert_eq!(state.hotkey_state(), HotkeyState::Registered);
+        state.set_hotkey_state(HotkeyState::Unavailable {
+            fallback_command: "wield-app".into(),
+        });
+        assert_eq!(
+            state.hotkey_state(),
+            HotkeyState::Unavailable {
+                fallback_command: "wield-app".into()
+            }
+        );
     }
 }

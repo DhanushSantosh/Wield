@@ -22,6 +22,14 @@
         "skipTaskbar": true,
         "resizable": false,
         "visible": false
+      },
+      {
+        "label": "preferences",
+        "title": "Wield Preferences",
+        "width": 640,
+        "height": 480,
+        "resizable": true,
+        "visible": false
       }
     ],
     "security": { "csp": null }

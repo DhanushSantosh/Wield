@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions for the Wield palette window",
-  "windows": ["palette"],
+  "description": "Default permissions for the Wield palette and preferences windows",
+  "windows": ["palette", "preferences"],
   "permissions": [
     "core:default",
     "core:window:allow-show",

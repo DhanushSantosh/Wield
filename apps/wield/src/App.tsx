@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { bumpRecent, getRecentIds } from "./lib/recents";
+import { getBlurToHide } from "./lib/settings";
 import {
   cancelRun,
   createRunId,
@@ -229,7 +230,9 @@ export default function App() {
   }, [state.query]);
 
   useEffect(() => {
-    const onBlur = () => void hidePalette();
+    const onBlur = () => {
+      if (getBlurToHide()) void hidePalette();
+    };
     window.addEventListener("blur", onBlur);
     return () => window.removeEventListener("blur", onBlur);
   }, []);

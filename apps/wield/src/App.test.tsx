@@ -240,3 +240,13 @@ test("top-level Escape and window blur hide the palette", async () => {
   fireEvent(window, new Event("blur"));
   expect(hidePaletteMock).toHaveBeenCalledTimes(2);
 });
+
+test("blur does not hide the palette when the setting is off", async () => {
+  const { setBlurToHide } = await import("./lib/settings");
+  setBlurToHide(false);
+  render(<App />);
+  await screen.findByText("Pick a color");
+  fireEvent(window, new Event("blur"));
+  expect(hidePaletteMock).not.toHaveBeenCalled();
+  setBlurToHide(true);
+});

@@ -141,6 +141,8 @@ pub fn run() {
     let setup_shell = shell.clone();
 
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             app_info,

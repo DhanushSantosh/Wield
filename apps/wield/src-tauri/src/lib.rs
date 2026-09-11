@@ -22,7 +22,11 @@ fn app_info() -> AppInfo {
 pub fn run() {
     let _guard = logging::init();
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info, commands::capabilities])
+        .invoke_handler(tauri::generate_handler![
+            app_info,
+            commands::capabilities,
+            commands::list_tools
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Wield");
 }

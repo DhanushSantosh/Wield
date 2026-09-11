@@ -1,0 +1,63 @@
+.arg-form__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.arg-form__header h1 {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 550;
+}
+
+.arg-form__back {
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+}
+
+.arg-form__fields {
+  display: grid;
+  gap: 16px;
+  max-height: 326px;
+  padding: 18px 20px;
+  overflow-y: auto;
+}
+
+.arg-form__field {
+  display: grid;
+  gap: 7px;
+}
+
+.field-name {
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.field-help,
+.arg-form__footer {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.arg-form__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.primary-action {
+  min-width: 112px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 600 13px/1.2 var(--font-ui);
+}

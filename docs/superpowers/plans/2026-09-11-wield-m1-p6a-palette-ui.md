@@ -4,6 +4,8 @@
 
 **Goal:** Replace `apps/wield/src`'s P1 placeholder with the real palette UI: search with recents, keyboard navigation, a generated argument form, a running/progress view, and result cards for every `ToolOutcome` variant — plus the two small additive backend changes it needs.
 
+**Status:** Complete on `feat/p6a-palette-ui` — 2026-09-11. The live-cancel contract received one necessary correction: the frontend supplies the run ID before invoking `run_tool`, while backend/D-Bus callers retain generated-ID fallback behavior. Full format, clippy, Rust, TypeScript, lint, and frontend test gates are green. The native app launched, owned its D-Bus name, accepted `ShowPalette`, and completed a real PNG→WebP run; browser preview confirmed the visual shell. Native-window UI automation was unavailable, so the complete interaction matrix is verified by the 10 App integration tests rather than claimed as a hand-driven native-window pass.
+
 **Architecture:** `App.tsx` holds a small `useReducer` state machine (`search | form | running | result`) and renders one of `SearchView` / `ArgForm` / `RunningView` / `ResultView` accordingly. All backend access goes through `lib/wield.ts`, a typed wrapper over `invoke` whose TypeScript types mirror `wield-core`'s serde output exactly (externally-tagged enums; unit variants as bare strings). `list_tools` gains an optional search query (reusing `Registry::search`) and a per-tool unavailability `reason`; `run_tool` gains a `Channel<Progress>` parameter so progress that P5a discarded now reaches the UI live.
 
 **Tech Stack:** React 19, TypeScript, Vite, Vitest + Testing Library (all already set up). New: `@tauri-apps/plugin-dialog` (file/dir pickers — portal-backed on Linux) and `@tauri-apps/plugin-opener` ("open folder").
@@ -127,7 +129,7 @@
   }
   ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to the `#[cfg(test)] mod tests` block in `commands.rs`:
 
@@ -170,19 +172,19 @@ pub(crate) fn for_test_sync() -> Self {
 ```
 (If `tauri::async_runtime::block_on` isn't available/appropriate outside a running app in this Tauri version, use `tokio::runtime::Runtime::new().unwrap().block_on(...)` instead — mechanical correction, note it.)
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-app`
 Expected: FAIL (new fields/params don't exist).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo test -p wield-app`
 Expected: PASS — all prior P5a/P5b tests plus the three new ones. `tray.rs`'s `ToolSummary` fixtures (P5b) now need `reason: None` added — fix those construction sites too.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git checkout -b feat/p6a-palette-ui
@@ -245,7 +247,7 @@ pub async fn run_tool(
 ```
 Every existing call site of `run_tool_impl` in `commands.rs`'s tests (P5a's `run_tool_runs_a_command_tool_against_a_stub`, `run_tool_rejects_unknown_arguments` — wait, that one calls `coerce_json_args` directly, unaffected — and `cancel_stops_an_in_flight_run`) must add a no-op `|_p| {}` (or a `Vec`-collecting closure where a test wants to assert on progress) as the fourth argument. `PendingShell::run_tool` in `lib.rs` (the D-Bus bridge, P5a) also calls `run_tool_impl` — update it to pass `|_p| {}` too (the D-Bus one-shot path doesn't stream progress; that's fine, it's a different consumer).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `commands.rs`'s tests:
 
@@ -276,10 +278,10 @@ async fn run_tool_forwards_progress_before_the_final_outcome() {
 ```
 (`wield_core::Progress` needs `PartialEq` to support `contains` — check `outcome.rs`; it already derives `PartialEq`, confirmed in P2.)
 
-- [ ] **Step 2: Run to verify failure** — `cargo test -p wield-app run_tool_forwards_progress`
-- [ ] **Step 3: Implement; update every existing `run_tool_impl` call site (tests + `PendingShell`)**
-- [ ] **Step 4: Run to verify pass** — `cargo test -p wield-app`
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `cargo test -p wield-app run_tool_forwards_progress`
+- [x] **Step 3: Implement; update every existing `run_tool_impl` call site (tests + `PendingShell`)**
+- [x] **Step 4: Run to verify pass** — `cargo test -p wield-app`
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src-tauri
@@ -299,7 +301,7 @@ git commit -m "feat(app): run_tool streams Progress over a Tauri channel"
 - `lib.rs`: in the `tauri::Builder::default()` chain, add `.plugin(tauri_plugin_dialog::init())` and `.plugin(tauri_plugin_opener::init())` before `.manage(state)` (plugin registration order relative to `.manage` doesn't matter, but do it before `.build(...)`).
 - `capabilities/default.json`: add the dialog and opener default permission identifiers to `"permissions"` (e.g. `"dialog:default"`, `"opener:default"` — confirm the exact identifiers each plugin's own capability schema expects once installed; they publish a `default` permission set, use it rather than hand-picking individual commands).
 
-- [ ] **Step 1: Install and register**
+- [x] **Step 1: Install and register**
 
 ```bash
 cd /home/dhanush/Projects/Wield
@@ -308,16 +310,16 @@ export PATH="$HOME/.cargo/bin:$PATH"
 cd apps/wield/src-tauri && cargo add tauri-plugin-dialog@2 tauri-plugin-opener@2 && cd -
 ```
 
-- [ ] **Step 2: Wire `lib.rs` and `capabilities/default.json`**
+- [x] **Step 2: Wire `lib.rs` and `capabilities/default.json`**
 
-- [ ] **Step 3: Verify the backend still builds**
+- [x] **Step 3: Verify the backend still builds**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && rm -rf apps/wield/src-tauri/gen && cargo check -p wield-app`
 Expected: PASS.
 
-- [ ] **Step 4: `npm run check`** — PASS (no frontend code uses the new packages yet; this just confirms install + typecheck don't choke on them).
+- [x] **Step 4: `npm run check`** — PASS (no frontend code uses the new packages yet; this just confirms install + typecheck don't choke on them).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/package.json package-lock.json apps/wield/src-tauri
@@ -411,7 +413,7 @@ Implementation notes:
 - `cancelRun` → `invoke<boolean>("cancel", { runId })`.
 - A small `ArgValue` encoder is **not** needed here — `args` is passed as a plain JS object (`{ input: "/x/a.png", width: 800 }`) matching the backend's `coerce_json_args`, which already expects bare JSON values keyed by arg name (see P5a `commands.rs`), not the `ArgValueLiteral`-tagged shape (that shape is only for descriptor `default`/`when` values).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/wield/src/lib/wield.test.ts`:
 
@@ -460,10 +462,10 @@ test("cancelRun invokes cancel with the run id", async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement `lib/wield.ts`**
-- [ ] **Step 4: Run to verify pass** — `npm run test -w apps/wield`
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement `lib/wield.ts`**
+- [x] **Step 4: Run to verify pass** — `npm run test -w apps/wield`
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/lib/wield.ts apps/wield/src/lib/wield.test.ts
@@ -487,7 +489,7 @@ export function getRecentIds(): string[]; // most-recent-first, reads localStora
 export function bumpRecent(id: string): void; // moves/inserts id to the front, caps at MAX, swallows storage errors
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```typescript
 import { beforeEach, expect, test } from "vitest";
@@ -521,10 +523,10 @@ test("getRecentIds returns an empty list when storage is empty or corrupt", () =
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/lib/recents.ts apps/wield/src/lib/recents.test.ts
@@ -594,9 +596,9 @@ body {
 ```
 (Additional component-scoped rules are added alongside each component in later tasks — this task only establishes the shared tokens + base reset, matching how `main.tsx` in P1 had no stylesheet at all.)
 
-- [ ] **Step 1: Create `styles.css` and import it in `main.tsx`** (`import "./styles.css";` before the `App` import)
-- [ ] **Step 2: Verify** — `export PATH="$HOME/.cargo/bin:$PATH" && npm run check` → PASS (nothing references the new classes yet, but lint/typecheck/test must stay green).
-- [ ] **Step 3: Commit**
+- [x] **Step 1: Create `styles.css` and import it in `main.tsx`** (`import "./styles.css";` before the `App` import)
+- [x] **Step 2: Verify** — `export PATH="$HOME/.cargo/bin:$PATH" && npm run check` → PASS (nothing references the new classes yet, but lint/typecheck/test must stay green).
+- [x] **Step 3: Commit**
 
 ```bash
 git add apps/wield/src/styles.css apps/wield/src/main.tsx
@@ -639,7 +641,7 @@ export function SearchView(props: SearchViewProps): JSX.Element;
 ```
 Input row (`→` glyph, `placeholder="Search tools…"`, controlled `value={query}`), a divider, then `showingRecents && <div className="section-label">Recent</div>`, then one `ToolRow` per `tools[i]` with `selected={i === selectedIndex}`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `ToolRow.test.tsx`:
 ```typescript
@@ -687,10 +689,10 @@ test("typing calls onQueryChange", async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement both components + their scoped CSS (append to `styles.css` or a co-located `.css` import — pick one convention and use it consistently for the rest of the plan; recommend co-located per-component CSS files imported by each component, since it keeps `styles.css` to just the shared tokens)**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement both components + their scoped CSS (append to `styles.css` or a co-located `.css` import — pick one convention and use it consistently for the rest of the plan; recommend co-located per-component CSS files imported by each component, since it keeps `styles.css` to just the shared tokens)**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/palette/ToolRow.tsx apps/wield/src/palette/ToolRow.test.tsx apps/wield/src/palette/SearchView.tsx apps/wield/src/palette/SearchView.test.tsx apps/wield/src/palette/*.css
@@ -720,7 +722,7 @@ export function useKeyboardNav(options: KeyboardNavOptions): void;
 ```
 `ArrowDown`/`ArrowUp` move `selectedIndex` by ±1, clamped to `[0, itemCount - 1]` (no wrap — spec doesn't call for wrap-around; clamping is simpler and equally standard). `Enter` calls `onActivate()`. `Escape` calls `onEscape()`. All three `preventDefault()` so the browser doesn't scroll or do anything else. No-ops (no listener effect) when `itemCount === 0` for the arrow keys, but `Escape`/`Enter` still fire.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```typescript
 import { renderHook } from "@testing-library/react";
@@ -758,10 +760,10 @@ test("Enter and Escape call their handlers", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/useKeyboardNav.ts apps/wield/src/useKeyboardNav.test.ts
@@ -807,7 +809,7 @@ export function ArgForm(props: ArgFormProps): JSX.Element;
 ```
 Computes visible fields client-side mirroring `wield-core`'s `visible_args` rule (Task 9 Step 3 implements this as a small pure helper, `isVisible(spec, values, allSpecs)`, exported for its own unit tests): a spec with `when: null` is always visible; with `when: { arg, in: [] }` (the presence form) visible iff `values[arg]` is set; with `when: { arg, in: [...] }` visible iff `values[arg]` matches one of the literals **and** the referenced spec is itself visible. Only visible fields render, in `args` order, each as one `FormField` with a `<label>` above it (spec's `.field-name` styling — see the brainstorm mockup, `field-name` not `label` class to avoid any future collision). Submit button text is the tool's title's verb-ish first word where sensible, but per YAGNI just use the tool's title as the label is fine — **use `tool.title`** as the button text (matches the locked mockup's "Convert" button, since `image.convert`'s title is "Convert image" — actually the mockup showed the bare verb "Convert"; since deriving a verb from an arbitrary title is unreliable string-munging, use the literal `tool.title` as the button text instead ("Convert image") and don't try to shorten it — note this as a deliberate, small deviation from the mockup's exact copy, not a placeholder).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `FormField.test.tsx` — one test per `ArgType` branch (7 tests: File, Dir, Str, Int, Float, Bool, Enum), each rendering the field and firing a change, asserting `onChange` received the right coerced value. Mock `@tauri-apps/plugin-dialog`'s `open` for the File/Dir cases.
 
@@ -846,10 +848,10 @@ test("initialValues pre-fills the form for Run again", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement `FormField.tsx`, `ArgForm.tsx` (incl. exported `isVisible`)**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement `FormField.tsx`, `ArgForm.tsx` (incl. exported `isVisible`)**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/palette/FormField.tsx apps/wield/src/palette/FormField.test.tsx apps/wield/src/palette/ArgForm.tsx apps/wield/src/palette/ArgForm.test.tsx apps/wield/src/palette/*.css
@@ -874,7 +876,7 @@ export function RunningView(props: RunningViewProps): JSX.Element;
 ```
 Renders a spinner + `"{verb-ish message}"` — use `Converting {toolTitle}…"`-style text is over-specific per tool; simplest correct copy: `${toolTitle}…` (e.g. "Convert image…") which reads fine for every current and future tool without per-tool copy logic. Below it: a progress bar (`--accent` fill) only when `progress` is `{ Percent: n }` (width `${n}%`); when `progress` is `{ Message: m }`, show `m` as the line instead of the tool title suffix; otherwise (null/`Started`) show just the spinner, no bar. Footer hint: "esc to cancel".
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```typescript
 import { render, screen } from "@testing-library/react";
@@ -899,10 +901,10 @@ test("shows just the tool title with no bar before any progress arrives", () => 
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/palette/RunningView.tsx apps/wield/src/palette/RunningView.test.tsx apps/wield/src/palette/*.css
@@ -938,12 +940,12 @@ export function ResultView(props: ResultViewProps): JSX.Element;
 - `FileResult.onOpenFolder` → `@tauri-apps/plugin-opener`'s `revealItemInDir(path)`; `onRunAgain` → `props.onRunAgain()`.
 - `FailedResult.onRetry` → `props.onRetry()`; `onCopyDetails` → `navigator.clipboard.writeText(detail)`.
 
-- [ ] **Step 1: Write the failing tests** — one rendering test per component (5 files) asserting the key text/values show and the right callback fires on its trigger, plus a `ResultView.test.tsx` with one case per `ToolOutcome` tag asserting the right child component's distinguishing text appears (e.g. the `Value` case renders the hex string, the `Failed` case renders `detail`).
+- [x] **Step 1: Write the failing tests** — one rendering test per component (5 files) asserting the key text/values show and the right callback fires on its trigger, plus a `ResultView.test.tsx` with one case per `ToolOutcome` tag asserting the right child component's distinguishing text appears (e.g. the `Value` case renders the hex string, the `Failed` case renders `detail`).
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement all six files**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement all six files**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/palette/outcomes apps/wield/src/palette/ResultView.tsx apps/wield/src/palette/ResultView.test.tsx
@@ -978,7 +980,7 @@ Behaviour, precisely per the design spec §3/§4:
 - `Escape` handling exactly per spec §4: `form` → `search` (query untouched); `running` → call `cancelRun(runId)` then wait for the in-flight promise's `Cancelled` resolution to actually transition (don't optimistically transition before the backend confirms — avoids a race where a `FINISHED` with a real outcome arrives after you've already left); `result` reached via a normal run → `search`; `result` reached via **Run again** → back to `{ kind: "form", tool, values: lastValues }` (this needs the reducer to remember *how* the current result was reached — simplest: `RUN_AGAIN` sets a flag/marker consumed by the next `Escape` from `result`, e.g. store `viaRunAgain: boolean` on the `result` view state); at `search` with `query === ""`, call `hidePalette` (import `@tauri-apps/api/window` or reuse an existing `invoke("hide_palette")` — **note:** `hide_palette` is a P5a command taking `AppHandle`, no args — call it via `lib/wield.ts`'s pattern, add a one-line `hidePalette()` export there too as part of this task).
 - `FileResult`'s "Run again" and `FailedResult`'s "Retry" both dispatch `RUN_AGAIN` (retry reuses the exact same values and re-runs immediately without showing the form again — matches spec §3.10 "retry … re-runs with the same args, skipping the form"; "Run again" on a File result goes back to the *form* per spec §3.7 wording "Run again returns to the form with values retained" — these are two different UX flows despite similar names: **Failed → Retry = re-run immediately; File/Value → Run again = reopen the form**. Encode this as two distinct reducer actions, `RETRY` (re-run) and `RUN_AGAIN` (reopen form), not one.).
 
-- [ ] **Step 1–4: TDD this incrementally** — this task is large enough that "write one test, watch it fail, implement, watch it pass" applies at the level of *one reducer transition at a time*, not the whole component in one shot. Suggested order, each its own red/green cycle within this task (not separate top-level tasks — Task 13 is the outer integration-test net; these are the inner loop building `App.tsx` itself):
+- [x] **Step 1–4: TDD this incrementally** — this task is large enough that "write one test, watch it fail, implement, watch it pass" applies at the level of *one reducer transition at a time*, not the whole component in one shot. Suggested order, each its own red/green cycle within this task (not separate top-level tasks — Task 13 is the outer integration-test net; these are the inner loop building `App.tsx` itself):
   1. Renders `SearchView` initially, `listTools()` called on mount.
   2. Selecting a no-arg tool (`color.pick`) runs immediately (mock `runTool`).
   3. Selecting `image.convert` opens the form; submitting it calls `runTool` and transitions through `running` to `result`.
@@ -987,7 +989,7 @@ Behaviour, precisely per the design spec §3/§4:
   6. Progress events update the `running` view live.
   Use the existing `App.test.tsx`-style `vi.mock("./lib/wield")` (mock the whole module, not `@tauri-apps/api/core` directly, now that everything goes through `lib/wield.ts`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/App.tsx
@@ -1011,13 +1013,13 @@ git commit -m "feat(app-ui): App state machine wiring search, form, run, and res
 5. Escape stepping matrix from spec §4, as one test walking: search → form → escape → search → form (again) → run → escape (cancels) → search.
 6. An unavailable tool's row shows its reason and Enter does nothing (list state unchanged).
 
-- [ ] **Step 1: Write these six tests against the Task 12 implementation** (they should mostly pass immediately if Task 12's inner loop was thorough — this task is the "did we actually wire it all together right" check, expect to find and fix a few gaps, which is normal and not a plan failure).
-- [ ] **Step 2: Run — fix any gap found, don't skip**
+- [x] **Step 1: Write these six tests against the Task 12 implementation** (they should mostly pass immediately if Task 12's inner loop was thorough — this task is the "did we actually wire it all together right" check, expect to find and fix a few gaps, which is normal and not a plan failure).
+- [x] **Step 2: Run — fix any gap found, don't skip**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && npm run test -w apps/wield`
 Expected: PASS, all 6 plus everything from Tasks 4–11.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add apps/wield/src/App.test.tsx
@@ -1028,7 +1030,7 @@ git commit -m "test(app-ui): end-to-end palette flow coverage"
 
 ## Task 14: Workspace green + P6a wrap-up
 
-- [ ] **Step 1: Full checks**
+- [x] **Step 1: Full checks**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -1038,7 +1040,7 @@ cargo test --workspace
 npm run check
 ```
 
-- [ ] **Step 2: Manual smoke (if a display is available)**
+- [x] **Step 2: Manual smoke (if a display is available)**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -1046,13 +1048,13 @@ npm run dev:app -w apps/wield &   # or: (cd apps/wield && npm run dev)
 ```
 Trigger `show_palette` (e.g. the tray, if one built in P5b renders here) and walk the flow by hand: search "color", run `color.pick`, search "convert", fill and run `image.convert` against a real small PNG, confirm the result path opens, confirm Escape/cancel behave as designed. If no display/tray interaction is possible in this environment, say so plainly in the report rather than claiming it was checked (same honesty standard as P5a/P5b's launch smoke caveats).
 
-- [ ] **Step 3: Report to GEON**
+- [x] **Step 3: Report to GEON**
 
 ```
 agent-comms message post --to GEON --kind FYI --subject "P6a complete" --body "Palette UI landed on feat/p6a-palette-ui: search+recents, keyboard nav, generated arg form (incl. the When presence form client-side), running view with live progress (new Channel<Progress> on run_tool), and all 5 ToolOutcome result cards, near-black+teal design system per the approved spec. list_tools gained a search query + reason field. cargo test --workspace + clippy + npm run check green. Manual UI smoke: <done | not possible, no display>. N commits, branch pushed."
 ```
 
-- [ ] **Step 4: Commit the plan + push**
+- [x] **Step 4: Commit the plan + push**
 
 ```bash
 git add docs/superpowers/plans/2026-09-11-wield-m1-p6a-palette-ui.md

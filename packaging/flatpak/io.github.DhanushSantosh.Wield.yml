@@ -35,8 +35,9 @@ modules:
         packaging/flatpak/io.github.DhanushSantosh.Wield.desktop
         /app/share/applications/io.github.DhanushSantosh.Wield.desktop
       - >-
-        install -Dm644 apps/wield/src-tauri/icons/icon.png
-        /app/share/icons/hicolor/256x256/apps/io.github.DhanushSantosh.Wield.png
+        install -Dm644
+        packaging/flatpak/io.github.DhanushSantosh.Wield.png
+        /app/share/icons/hicolor/512x512/apps/io.github.DhanushSantosh.Wield.png
       - >-
         install -Dm644
         packaging/flatpak/io.github.DhanushSantosh.Wield.metainfo.xml

@@ -37,8 +37,9 @@
 ### Known gaps
 
 - **Icon:** the package still uses the placeholder desk illustration in
-  `assets/icon.png`. Replace it with a Wield-specific icon before requesting
-  final Flathub approval. No pipeline change is required.
+  `assets/icon.png`; the Flatpak directory contains a mechanically scaled and
+  padded 512×512 copy for export. Replace both with a Wield-specific icon
+  before requesting final Flathub approval. No pipeline change is required.
 - **AppStream screenshots:** no screenshots are published yet. Add a
   `<screenshots>` block after release-quality UI captures exist.
 - **Bundled converter binaries:** ImageMagick, pandoc, qpdf and Ghostscript,

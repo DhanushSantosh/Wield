@@ -4333,10 +4333,12 @@ version = "0.1.0"
 dependencies = [
  "ashpd",
  "async-trait",
+ "futures-util",
  "serde_json",
  "tempfile",
  "tokio",
  "tokio-util",
+ "tracing",
  "wield-core",
  "zbus",
  "zbus_xml",

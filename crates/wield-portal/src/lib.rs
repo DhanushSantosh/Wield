@@ -4,6 +4,7 @@
 pub mod adapters;
 pub mod color;
 pub mod error;
+pub mod global_shortcuts;
 pub mod probe;
 pub mod runner;
 

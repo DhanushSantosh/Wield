@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { bumpRecent, getRecentIds } from "./lib/recents";
+import { getBlurToHide } from "./lib/settings";
 import {
   cancelRun,
   createRunId,
   hidePalette,
   listTools,
+  onSelectTool,
   runTool,
   type Progress,
   type RunId,
@@ -229,7 +231,9 @@ export default function App() {
   }, [state.query]);
 
   useEffect(() => {
-    const onBlur = () => void hidePalette();
+    const onBlur = () => {
+      if (getBlurToHide()) void hidePalette();
+    };
     window.addEventListener("blur", onBlur);
     return () => window.removeEventListener("blur", onBlur);
   }, []);
@@ -276,6 +280,19 @@ export default function App() {
     },
     [startRun],
   );
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    void onSelectTool((toolId) => {
+      void listTools().then((tools) => {
+        const tool = tools.find((t) => t.id === toolId);
+        if (tool) activate(tool);
+      });
+    }).then((fn) => {
+      unsubscribe = fn;
+    });
+    return () => unsubscribe?.();
+  }, [activate]);
 
   useEffect(() => {
     if (state.view.kind !== "running" && state.view.kind !== "result") return;

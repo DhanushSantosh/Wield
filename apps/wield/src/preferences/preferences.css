@@ -1,0 +1,107 @@
+.prefs-page {
+  padding: 24px 28px;
+  color: var(--text);
+  max-width: 640px;
+}
+
+.prefs-page h1 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 20px;
+}
+
+.prefs-section {
+  margin-bottom: 28px;
+}
+
+.prefs-section h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+
+.prefs-muted {
+  color: var(--text-muted);
+}
+
+.prefs-command-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.prefs-command {
+  font-family: var(--font-data);
+  font-size: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.prefs-action {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.prefs-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.prefs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.prefs-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: 4px 8px 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.prefs-table td {
+  padding: 6px 8px 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.prefs-table td:first-child,
+.prefs-table th:first-child {
+  padding-left: 0;
+}
+
+.prefs-mono {
+  font-family: var(--font-data);
+}
+
+.prefs-status-ok {
+  color: var(--accent);
+}
+
+.prefs-status-bad {
+  color: var(--text-muted);
+}
+
+.prefs-subsection {
+  margin-top: 16px;
+}
+
+.prefs-subsection h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}

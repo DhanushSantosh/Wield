@@ -7,6 +7,7 @@ const listToolsMock = vi.fn();
 const runToolMock = vi.fn();
 const cancelRunMock = vi.fn();
 const hidePaletteMock = vi.fn();
+let selectToolHandler: ((toolId: string) => void) | undefined;
 
 vi.mock("./lib/wield", async (importOriginal) => {
   const original = await importOriginal<typeof import("./lib/wield")>();
@@ -16,6 +17,12 @@ vi.mock("./lib/wield", async (importOriginal) => {
     runTool: (...args: unknown[]) => runToolMock(...args),
     cancelRun: (...args: unknown[]) => cancelRunMock(...args),
     hidePalette: (...args: unknown[]) => hidePaletteMock(...args),
+    onSelectTool: async (handler: (toolId: string) => void) => {
+      selectToolHandler = handler;
+      return () => {
+        selectToolHandler = undefined;
+      };
+    },
   };
 });
 
@@ -239,4 +246,43 @@ test("top-level Escape and window blur hide the palette", async () => {
   fireEvent.keyDown(window, { key: "Escape" });
   fireEvent(window, new Event("blur"));
   expect(hidePaletteMock).toHaveBeenCalledTimes(2);
+});
+
+test("blur does not hide the palette when the setting is off", async () => {
+  const { setBlurToHide } = await import("./lib/settings");
+  setBlurToHide(false);
+  render(<App />);
+  await screen.findByText("Pick a color");
+  fireEvent(window, new Event("blur"));
+  expect(hidePaletteMock).not.toHaveBeenCalled();
+  setBlurToHide(true);
+});
+
+test("a tray tool-selection event opens the form for an argument tool", async () => {
+  render(<App />);
+  await screen.findByText("Pick a color");
+  await act(async () => selectToolHandler?.("image.convert"));
+  expect(await screen.findByRole("heading", { name: "Convert image" })).toBeInTheDocument();
+});
+
+test("a tray tool-selection event runs a no-argument tool immediately", async () => {
+  runToolMock.mockResolvedValue({
+    run_id: "run-tray",
+    outcome: { Value: { kind: "Text", data: "done" } },
+  });
+  render(<App />);
+  await screen.findByText("Pick a color");
+  await act(async () => selectToolHandler?.("color.pick"));
+  expect(await screen.findByText("done")).toBeInTheDocument();
+});
+
+test("a tray tool-selection event for an unavailable tool does nothing", async () => {
+  listToolsMock.mockResolvedValue([
+    { ...convertTool, available: false, reason: "ImageMagick is not installed" },
+  ]);
+  render(<App />);
+  await screen.findByText("ImageMagick is not installed");
+  await act(async () => selectToolHandler?.("image.convert"));
+  expect(runToolMock).not.toHaveBeenCalled();
+  expect(screen.getByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
 });

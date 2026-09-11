@@ -16,11 +16,25 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { cancelRun, hidePalette, listTools, runTool } from "./wield";
+const listenMock = vi.fn();
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: (...args: unknown[]) => listenMock(...args),
+}));
+
+import {
+  cancelRun,
+  capabilities,
+  hidePalette,
+  hotkeyStatus,
+  listTools,
+  onSelectTool,
+  runTool,
+} from "./wield";
 
 beforeEach(() => {
   invokeMock.mockReset();
   channelInstances.length = 0;
+  listenMock.mockReset();
 });
 
 test("listTools passes the query through, defaulting to null", async () => {
@@ -61,4 +75,33 @@ test("hidePalette invokes the palette hide command", async () => {
   invokeMock.mockResolvedValueOnce(undefined);
   await hidePalette();
   expect(invokeMock).toHaveBeenCalledWith("hide_palette");
+});
+
+test("hotkeyStatus invokes hotkey_status", async () => {
+  invokeMock.mockResolvedValueOnce({ state: "Registered" });
+  expect(await hotkeyStatus()).toEqual({ state: "Registered" });
+  expect(invokeMock).toHaveBeenCalledWith("hotkey_status");
+});
+
+test("capabilities invokes capabilities", async () => {
+  const report = { binaries: { magick: true }, portals: { Screenshot: 2 }, tools: [] };
+  invokeMock.mockResolvedValueOnce(report);
+  expect(await capabilities()).toEqual(report);
+  expect(invokeMock).toHaveBeenCalledWith("capabilities");
+});
+
+test("onSelectTool forwards the event payload and returns an unsubscribe fn", async () => {
+  let captured: ((event: { payload: string }) => void) | undefined;
+  const unlistenMock = vi.fn();
+  listenMock.mockImplementation((_name: string, cb: typeof captured) => {
+    captured = cb;
+    return Promise.resolve(unlistenMock);
+  });
+  const handler = vi.fn();
+  const unsubscribe = await onSelectTool(handler);
+  captured?.({ payload: "image.convert" });
+  expect(handler).toHaveBeenCalledWith("image.convert");
+  expect(listenMock).toHaveBeenCalledWith("tray://select-tool", expect.any(Function));
+  unsubscribe();
+  expect(unlistenMock).toHaveBeenCalled();
 });

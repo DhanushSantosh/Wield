@@ -98,3 +98,37 @@ export async function cancelRun(runId: RunId): Promise<boolean> {
 export async function hidePalette(): Promise<void> {
   return invoke<void>("hide_palette");
 }
+
+// HotkeyState is internally tagged (#[serde(tag = "state")]) on the Rust
+// side — unlike every other enum here, which is externally tagged.
+export type HotkeyState =
+  | { state: "Pending" }
+  | { state: "Registered" }
+  | { state: "Unavailable"; fallback_command: string };
+
+export interface ToolAvailability {
+  id: string;
+  title: string;
+  available: boolean;
+  reason: string | null;
+}
+
+export interface CapabilitiesReport {
+  binaries: Record<string, boolean>;
+  portals: Record<string, number>;
+  tools: ToolAvailability[];
+}
+
+export async function hotkeyStatus(): Promise<HotkeyState> {
+  return invoke<HotkeyState>("hotkey_status");
+}
+
+export async function capabilities(): Promise<CapabilitiesReport> {
+  return invoke<CapabilitiesReport>("capabilities");
+}
+
+/** Subscribes to the tray's tool-selection event; returns an unsubscribe function. */
+export async function onSelectTool(handler: (toolId: string) => void): Promise<() => void> {
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen<string>("tray://select-tool", (event) => handler(event.payload));
+}

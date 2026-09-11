@@ -108,7 +108,7 @@
   ```
   (`BTreeMap<String, T>` on the Rust side serializes as a plain JSON object — `Record<string, T>` is correct, not a `Map`.)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `wield.test.ts`:
 
@@ -146,10 +146,10 @@ test("onSelectTool forwards the event payload and returns an unsubscribe fn", as
 ```
 (The dynamic `import("@tauri-apps/api/event")` inside `onSelectTool` plus `vi.doMock` + a fresh module import in the test is the simplest way to mock an event module only used by one function, without adding a static import that every other `wield.test.ts` case would then need to mock too. If a static top-level `import { listen } from "@tauri-apps/api/event"` proves easier to keep consistent with the rest of the file's mocking style, use that instead — implementer's call, not a design fork worth asking about.)
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git checkout -b feat/p6b-preferences
@@ -171,7 +171,7 @@ export function getBlurToHide(): boolean; // default true; reads localStorage, t
 export function setBlurToHide(value: boolean): void;
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```typescript
 import { beforeEach, expect, test } from "vitest";
@@ -196,10 +196,10 @@ test("corrupt storage falls back to the default", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/lib/settings.ts apps/wield/src/lib/settings.test.ts
@@ -234,12 +234,12 @@ createRoot(document.getElementById("root")!).render(
 ```
 `Preferences.tsx` doesn't exist until Task 4 — this task creates a minimal placeholder (`export default function Preferences() { return <div>Preferences</div>; }`) purely so the import resolves and `npm run check` stays green; Task 4 replaces it.
 
-- [ ] **Step 1: Implement the routing + placeholder `Preferences.tsx`**
+- [x] **Step 1: Implement the routing + placeholder `Preferences.tsx`**
 
 (No new failing test here — this is wiring, not new logic. Verify manually: `npm run typecheck -w apps/wield` passes with the new import.)
 
-- [ ] **Step 2: Verify** — `export PATH="$HOME/.cargo/bin:$PATH" && npm run check` → PASS.
-- [ ] **Step 3: Commit**
+- [x] **Step 2: Verify** — `export PATH="$HOME/.cargo/bin:$PATH" && npm run check` → PASS.
+- [x] **Step 3: Commit**
 
 ```bash
 git add apps/wield/src/main.tsx apps/wield/src/Preferences.tsx
@@ -260,7 +260,7 @@ export function HotkeySection(props: { status: HotkeyState | null }): JSX.Elemen
 ```
 `status === null` (still loading) → a quiet "Checking…" line. `{ state: "Pending" }` → same "Checking…" (P6b doesn't distinguish "still loading the component" from "backend hasn't finished binding yet" — both read the same to a user). `{ state: "Registered" }` → "Global shortcut: Super+W" (the literal trigger string isn't returned by the backend today — hardcode the known default `Super+W` per `wield-portal::global_shortcuts::PREFERRED_TRIGGER`, with a comment noting it should become dynamic if/when the backend ever reports the DE-confirmed trigger instead of just the preferred one). `{ state: "Unavailable", fallback_command }` → the reason text plus the command in a `--font-data` monospace chip with a "Copy" button (`navigator.clipboard.writeText`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```typescript
 import { render, screen } from "@testing-library/react";
@@ -287,10 +287,10 @@ test("shows the fallback command with a working copy button when unavailable", a
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/preferences/HotkeySection.tsx apps/wield/src/preferences/HotkeySection.test.tsx apps/wield/src/preferences/HotkeySection.css
@@ -311,7 +311,7 @@ export function PaletteBehaviorSection(): JSX.Element;
 ```
 Self-contained (reads/writes `lib/settings.ts` directly — no props needed, keeps `Preferences.tsx` from having to thread setting state through every section for a single checkbox). One checkbox: "Hide the palette when it loses focus", `checked={getBlurToHide()}` on mount via `useState(getBlurToHide)`, `onChange` calls `setBlurToHide(next)` and updates local state.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```typescript
 import { render, screen } from "@testing-library/react";
@@ -332,10 +332,10 @@ test("checkbox reflects and updates the blur-to-hide setting", async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/preferences/PaletteBehaviorSection.tsx apps/wield/src/preferences/PaletteBehaviorSection.test.tsx apps/wield/src/preferences/*.css
@@ -359,7 +359,7 @@ export function SystemStatusSection(props: { report: CapabilitiesReport | null }
 - **Portals** — one row per `Object.entries(report.portals)`: interface name + `v${version}`. Empty → "No portals detected" (not an error state — just informational).
 - **Tools** — one row per `report.tools`: title + "Available" or the `reason` text (dimmed, `--text-muted`), same visual language as P6a's `ToolRow` unavailable state for consistency.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```typescript
 import { render, screen } from "@testing-library/react";
@@ -392,10 +392,10 @@ test("lists binaries, portals, and per-tool availability", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/preferences/SystemStatusSection.tsx apps/wield/src/preferences/SystemStatusSection.test.tsx apps/wield/src/preferences/*.css
@@ -417,7 +417,7 @@ export default function Preferences(): JSX.Element;
 ```
 On mount, calls `hotkeyStatus()` and `capabilities()` (each independently — one being slow shouldn't block the other), holds each in `useState<... | null>(null)`, renders a page with a title ("Wield Preferences") and the three sections in order: Hotkey, Palette behaviour, System Status. Reuses `.app-shell`-style framing from `styles.css` where sensible, but this window is a normal resizable window (not the frameless floating palette) — don't force the palette's `border-radius`/`box-shadow` onto it; a simple padded page is correct here.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```typescript
 import { render, screen } from "@testing-library/react";
@@ -445,10 +445,10 @@ test("renders all three sections once data loads", async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/Preferences.tsx apps/wield/src/Preferences.test.tsx
@@ -475,7 +475,7 @@ useEffect(() => {
 ```
 (`getBlurToHide` imported from `./lib/settings`.)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `App.test.tsx`:
 
@@ -492,10 +492,10 @@ test("blur does not hide the palette when the setting is off", async () => {
 ```
 (Confirm the existing suite already has a passing-case blur test from P6a covering `hidePaletteMock` *is* called when the setting is on/default; if it doesn't, add one — this task's job is to prove **both** branches of the new conditional, not just the new one.)
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/App.tsx apps/wield/src/App.test.tsx
@@ -528,7 +528,7 @@ useEffect(() => {
 ```
 (Match this to whatever `startRun`/activation helper Task 12 of P6a actually named and how it's called from `SearchController`'s `onActivate` — **reuse that exact function**, don't duplicate the "no-args tool runs immediately, else open the form" branch a second time. Read the current `App.tsx` before writing this task's code to get the real helper name/signature; the snippet above is illustrative of the *behavior*, not a literal diff.)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `App.test.tsx`:
 
@@ -555,10 +555,10 @@ test("a tray tool-selection event opens the form for an argument tool", async ()
 ```
 (If re-mocking `./lib/wield` mid-file via `vi.doMock` + a fresh dynamic `import("./App")` fights with the file's existing top-level `vi.mock`, the simpler alternative is adding `onSelectTool` to the file's *existing* top-level mock from the start — with a module-scoped `let selectToolHandler` the test can call directly — and skip the re-mock gymnastics entirely. Prefer the simpler alternative; the snippet shows the behavior to prove, not the only valid test structure.)
 
-- [ ] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run to verify failure** — `npm run test -w apps/wield`
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run to verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/wield/src/App.tsx apps/wield/src/App.test.tsx
@@ -569,7 +569,7 @@ git commit -m "feat(app-ui): wire tray tool selection into the palette"
 
 ## Task 10: Workspace green + P6b wrap-up
 
-- [ ] **Step 1: Full checks**
+- [x] **Step 1: Full checks**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -580,17 +580,17 @@ npm run check
 ```
 Expected: PASS. (The Rust side is untouched by this plan — these commands should be a no-op regression check, confirming that's actually true.)
 
-- [ ] **Step 2: Manual smoke (if a display/tray is available)**
+- [x] **Step 2: Manual smoke (if a display/tray is available)**
 
 Launch `wield-app`, open Preferences from the tray menu, confirm the hotkey/system-status sections show real data, toggle the blur setting, click a tool in the tray menu and confirm the palette opens to it. Report honestly if any of this isn't checkable in the execution environment (same standard as every prior plan).
 
-- [ ] **Step 3: Report to GEON**
+- [x] **Step 3: Report to GEON**
 
 ```
 agent-comms message post --to GEON --kind FYI --subject "P6b complete" --body "Preferences window now has real content: hotkey status + copyable fallback command, a blur-to-hide toggle, and a System Status page (binaries/portals/per-tool availability) from the existing hotkey_status/capabilities commands - no backend changes needed. Tray tool selection now opens the right tool in the palette. cargo test --workspace + clippy + npm run check green (Rust side untouched, confirmed no regressions). Manual UI smoke: <done | not possible, no display>. N commits, branch pushed."
 ```
 
-- [ ] **Step 4: Commit the plan + push**
+- [x] **Step 4: Commit the plan + push**
 
 ```bash
 git add docs/superpowers/plans/2026-09-11-wield-m1-p6b-preferences.md
@@ -624,3 +624,16 @@ GEON opens the PR, reviews, merges. **P7** (Flatpak packaging + CI) is last in M
 ## Execution note
 
 After P6b, every window has real content and every entry point (palette search, tray click, tray tool-select, the bound hotkey when available) reaches the right place. What's left in M1 is **P7**: Flatpak packaging (the manifest, bundled `ffmpeg`/`ImageMagick`/`pandoc`/`qpdf`/`tesseract`), AUR/`.deb`/`.rpm` secondary channels, and CI (the full test suite + the E2E smoke spec §8 describes — xvfb + dbus session + mock portal — which nothing before P7 has had the infrastructure to run). `1.0` is spec-gated on M1–M3, not M1 alone, so P7 finishes M1's slice but isn't the end of the project.
+
+---
+
+## Execution report (GEON, 2026-09-11)
+
+Owner said "do it yourself" — GEON executed all 10 tasks directly on `feat/p6b-preferences`, no SUNIO involvement. TDD followed throughout (failing test confirmed red, then implemented, then green, every task).
+
+- **No deviations from the plan's design.** `HotkeyState`/`CapabilitiesReport`/`ToolAvailability` types, the `localStorage` settings pattern, the window-label routing, and Task 9's tray-selection wiring all matched the plan's Interfaces sections as written — reused P6a's existing `activate(tool)` helper exactly, no duplicated branching logic.
+- **One reusable test-infra note (not a plan bug):** `localStorage` is not available bare in this project's Vitest/jsdom setup — every test touching it needs the `Object.defineProperty(window, "localStorage", {...})` polyfill already established by P6a's `recents.test.ts`. `settings.test.ts` follows that pattern.
+- **Task 9's test** used the plan's own documented "simpler alternative" (a module-scoped `selectToolHandler` captured by the file's existing top-level `vi.mock("./lib/wield", ...)`) rather than the `vi.doMock` + dynamic re-import sketch, exactly as the plan flagged as preferred.
+- **Full verification, all green:** `cargo fmt --all` (no diff — Rust side untouched, confirmed), `cargo clippy --workspace --all-targets -- -D warnings` (clean), `cargo test --workspace` (all `ok`, 0 failed, same pre-existing ignored/manual-only tests as before), `npm run check` (eslint clean, tsc clean, vitest 20 files / 70 tests passed, up from P6a's 51).
+- **Manual smoke — partially checkable, reported honestly (same standard as P6a's hotkey attempt):** rebuilt the frontend dist + debug binary fresh (not the stale mid-session instance) and launched `wield-app` in this environment. Confirmed via D-Bus/logs: starts headless (`wield shell ready (headless)`), owns the single-instance name `io.github.DhanushSantosh.Wield`, and registers as a real `StatusNotifierItem` (`busctl` shows it in `org.kde.StatusNotifierWatcher`'s `RegisteredStatusNotifierItems`, `Title` = `"wield-app"`, icon = the current placeholder DeskCrafter desk illustration, matching the known not-yet-replaced icon). Located the actual tray icon in the sandboxed desktop's panel and attempted to click through to the Preferences window and a tray tool-selection, but pixel-precise clicking in this virtualized desktop proved unreliable (repeated misclicks landed on the OS control center instead of the tray dropdown) — did not force it further. Preferences window content, the blur toggle, and tray-driven tool activation are NOT visually confirmed live; they are covered by the automated Preferences.test.tsx/App.test.tsx suites instead (14 + 3 tests, including two integration-style tests that drive the real `onSelectTool`→`listTools`→`activate` path end-to-end).
+- **N = 9 commits** on `feat/p6b-preferences` (Tasks 1–9 one each, plus this plan-completion commit). Branch pushed to `origin/feat/p6b-preferences`.

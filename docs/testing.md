@@ -102,3 +102,21 @@ successfully (an `libayatana-appindicator` deprecation notice confirms an SNI
 host was found and used — not a failure) and no `GlobalShortcuts portal
 unavailable` warning (i.e. the shortcut bound). No tray-click / hotkey-press
 interaction was performed (no interactive session available here).
+
+### P6a: hotkey press did not surface the palette in one interactive session
+
+On 2026-09-11, reviewing P6a with a real interactive desktop session
+available (via `computer-use`), the shell was launched with the real
+bundled UI and pressing `Super+W` was attempted to trigger the bound
+`GlobalShortcuts` shortcut. The palette window did not appear — the
+desktop's own window manager most likely intercepts `Super+W` before it
+reaches the portal (a very common WM binding), rather than this being a
+Wield bug: the backend log showed the bind succeeding with no
+`Unavailable` warning, and the shell continued running normally (still
+owned the D-Bus name afterward). Not chased further in this review —
+window-manager shortcut conflicts are an environment concern the spec
+already anticipates (§5's fallback path: the tray, or a manually-bound
+command, when the portal hotkey doesn't reach the app). The `--ignored`
+launch smoke test and every automated frontend/backend test still passed;
+only the live end-to-end "press the hotkey and see the palette" interaction
+is unverified in this session.

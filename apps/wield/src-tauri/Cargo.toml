@@ -19,7 +19,7 @@ wield-tools = { path = "../../../crates/wield-tools" }
 wield-portal = { path = "../../../crates/wield-portal" }
 serde.workspace = true
 serde_json.workspace = true
-tauri = { version = "2.9.5", features = [] }
+tauri = { version = "2.9.5", features = ["tray-icon"] }
 zbus.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "macros", "time"] }
 tokio-util.workspace = true
@@ -30,5 +30,5 @@ uuid.workspace = true
 async-trait.workspace = true
 
 [dev-dependencies]
-tauri = { version = "2.9.5", features = ["test"] }
+tauri = { version = "2.9.5", features = ["test", "tray-icon"] }
 tempfile.workspace = true

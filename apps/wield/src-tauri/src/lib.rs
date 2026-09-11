@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 mod logging;
+pub mod state;
 
 #[derive(Serialize)]
 pub struct AppInfo {

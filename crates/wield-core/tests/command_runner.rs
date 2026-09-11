@@ -60,17 +60,15 @@ async fn writes_output_atomically_on_success() {
 #[tokio::test]
 async fn nonzero_exit_reports_stderr_tail_and_cleans_temp() {
     let dir = tempfile::tempdir().unwrap();
-    let script = support::write_stub_script(
-        dir.path(),
-        "boom",
-        "#!/bin/sh\necho 'no decode delegate for FOO' 1>&2\nexit 3\n",
-    );
     let plan = OutputPlan::for_final(dir.path().join("x.out"));
     std::fs::write(&plan.temp, b"partial").unwrap();
     let (tx, _rx) = mpsc::channel(16);
-    let argv: Vec<String> = vec![];
+    let argv = vec![
+        "-c".to_owned(),
+        "echo 'no decode delegate for FOO' 1>&2; exit 3".to_owned(),
+    ];
     let result = CommandRunner::execute(RunSpec {
-        binary: &script,
+        binary: std::path::Path::new("/bin/sh"),
         argv: &argv,
         cwd: None,
         output: Some(&plan),

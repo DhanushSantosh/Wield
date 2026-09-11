@@ -120,3 +120,54 @@ command, when the portal hotkey doesn't reach the app). The `--ignored`
 launch smoke test and every automated frontend/backend test still passed;
 only the live end-to-end "press the hotkey and see the palette" interaction
 is unverified in this session.
+
+## P7: `kills_on_timeout` flaked repeatedly in real CI
+
+On 2026-09-11, once P7's CI workflow gave this project's first real GitHub
+Actions runner (not just this local dev sandbox), `wield-core`'s
+`command_runner::kills_on_timeout` test flaked three times in a row on the
+same branch — always the same failure, `assertion failed:
+matches!(result, CommandResult::Timeout)`, meaning the spawned
+`sleep 30` child reported as successfully *exited* well within the test's
+300ms timeout window instead of being killed for overrunning it.
+
+Two things were tried:
+
+1. **Hardened `write_stub_script`** (the shared test helper that writes,
+   chmods, and returns the path to a temp shell script) to explicitly
+   `sync_all()` the file handle before returning, on the theory that a
+   write/exec race on the runner's filesystem was letting a partially
+   written (and therefore fast-exiting) script get executed. This did not
+   fix it — the same failure recurred on the very next CI run, ruling this
+   out as the primary cause. Left in place anyway (it is a real hardening,
+   just not sufficient alone, and reverting it would be pure churn).
+2. **`--test-threads=1`** on `cargo test --workspace` in `ci.yml`. This
+   test binary spawns several short-lived child processes across its 6
+   tests, which by default run concurrently; `kills_on_timeout` is the one
+   test racing a *short* (300ms) timeout against a long-sleeping child in a
+   suite otherwise full of fast-exiting ones — exactly the shape of
+   workload where a rare async-runtime process-reaping mixup under heavy
+   concurrent spawn/reap churn (a known category of issue, not specific to
+   this codebase) could plausibly cause one child's exit notification to
+   get misattributed to another. Serializing test execution removes that
+   concurrent-spawn pressure entirely. This is the fix this project's own
+   history already anticipated needing ("candidate for P7 CI tuning
+   (--test-threads limit)", noted back in P5a) — applied here once a real
+   CI runner finally gave it a chance to actually surface.
+
+Never reproduced locally in this dev sandbox, in either failing or fixed
+form, across 15 stress-test runs — consistent with this being specific to
+the shared, contended CI runner environment, not a local reproduction path.
+
+**Confirms the diagnosis:** `ci.yml`'s own `cargo test --workspace --
+--test-threads=1` step passed clean on the very next run, but that same
+run's `npm run check` step — which runs `cargo test` a *second* time via
+`scripts/run-cargo.js` (root `package.json`'s `test` script), a separate,
+un-serialized invocation this fix hadn't reached yet — flaked on
+`cancels_promptly` instead (same file, same family, different specific
+test). Fixed by adding `-- --test-threads=1` to both `package.json` script
+definitions (`test` and `cargo:test`) that shell out to cargo, not just
+`ci.yml`'s own direct step. If it recurs a third way, the next step is a
+real root-cause investigation of `CommandRunner`'s `tokio::select!` race in
+`crates/wield-core/src/command.rs` against process-reaping behavior
+specifically, not another blind mitigation attempt.

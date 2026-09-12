@@ -24,7 +24,8 @@ jobs:
             libxdo-dev \
             libssl-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            libgtk-layer-shell-dev
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -75,6 +76,7 @@ jobs:
             libssl-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
+            libgtk-layer-shell-dev \
             xvfb \
             dbus-x11 \
             imagemagick

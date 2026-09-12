@@ -1,12 +1,12 @@
 //! Wayland layer-shell positioning for launchers and utility windows.
 //!
 //! Regular Wayland toplevels cannot choose absolute screen coordinates.
-//! `wlr-layer-shell` lets the compositor center a smaller surface anchored to
-//! both opposing edges. wlroots compositors and KDE implement the protocol;
+//! `wlr-layer-shell` lets the compositor center an unanchored surface. wlroots
+//! compositors and KDE implement the protocol;
 //! GNOME does not. [`is_available`] is the fail-closed gate, so unsupported
 //! sessions keep Tauri's existing window behavior unchanged.
 
-use gtk_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
+use gtk_layer_shell::{KeyboardMode, Layer, LayerShell};
 
 /// Returns whether the current session advertises `wlr-layer-shell`.
 ///
@@ -22,15 +22,13 @@ pub fn is_available() -> bool {
 
 /// Configures a not-yet-realized GTK window as a centered overlay surface.
 ///
-/// Anchoring to both edges of each axis delegates centering to the compositor.
-/// On-demand keyboard mode allows Wield's existing explicit focus behavior to
-/// keep controlling when the window receives keyboard input.
+/// Layer-shell surfaces are centered by default when no edges are anchored.
+/// Anchoring opposite edges would stretch the window and make GTK ignore its
+/// requested size. On-demand keyboard mode allows Wield's existing explicit
+/// focus behavior to keep controlling when the window receives keyboard input.
 pub fn configure(window: &gtk::ApplicationWindow) {
     window.init_layer_shell();
     window.set_layer(Layer::Overlay);
-    for edge in [Edge::Left, Edge::Right, Edge::Top, Edge::Bottom] {
-        window.set_anchor(edge, true);
-    }
     window.set_keyboard_mode(KeyboardMode::OnDemand);
 }
 

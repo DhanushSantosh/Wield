@@ -21,7 +21,7 @@ Live-tested on this project's dev environment (Hyprland, a wlroots-based Wayland
 
 `wlr-layer-shell` (`zwlr_layer_shell_v1`) is a Wayland protocol extension specifically designed for panels, launchers, notification overlays, and similar "not a regular app window" surfaces — implemented by every wlroots-based compositor (Hyprland, Sway, and others), and by KDE's KWin. It is exactly the mechanism real Linux launchers (Rofi in wayland mode, Wofi, Anyrun, fuzzel) already use to get reliable positioning that ordinary `xdg_toplevel` windows cannot achieve on Wayland.
 
-The protocol's anchoring model directly solves centering: a layer-shell surface anchored to **all four edges** (top, bottom, left, right) with a size smaller than the output is centered on both axes by the compositor itself — no manual coordinate math, no per-monitor geometry queries.
+The protocol's placement model directly solves centering: a layer-shell surface with **no anchored edges** is centered on both axes by the compositor itself — no manual coordinate math or per-monitor geometry queries. This was mechanically corrected after live Hyprland verification: the original design proposed all four anchors, but gtk-layer-shell's API contract states that opposite anchors stretch the surface in that direction and cause its size request to be ignored.
 
 ### 3.2 Toolchain reality
 
@@ -37,13 +37,13 @@ Tauri on Linux uses GTK3 (`tao` 0.35.3 depends on the `gtk` crate at `0.18`, whi
 
 At startup, before touching either window: check whether the current Wayland display advertises `zwlr_layer_shell_v1` in its registry (a global-presence check against the compositor's advertised interfaces — the same kind of capability probe `wield-portal::probe()` already does for portals, just against the Wayland registry instead of D-Bus).
 
-- **Available** (Hyprland, Sway, other wlroots compositors, KDE): initialize both windows as layer-shell surfaces — `Overlay` layer (stays above fullscreen content, matching a launcher's expected always-on-top behavior), anchored to all four edges, keyboard interactivity enabled (layer-shell surfaces don't receive keyboard input by default — a launcher without keyboard focus is useless), sized via the same `set_size()` calls already in use (Wield's dynamic-resize feature composes with this for free: resizing a four-edge-anchored surface keeps it centered through every step).
+- **Available** (Hyprland, Sway, other wlroots compositors, KDE): initialize both windows as unanchored layer-shell surfaces — `Overlay` layer (stays above fullscreen content, matching a launcher's expected always-on-top behavior), keyboard interactivity enabled (layer-shell surfaces don't receive keyboard input by default — a launcher without keyboard focus is useless), sized via the same `set_size()` calls already in use (Wield's dynamic-resize feature composes with this for free: resizing an unanchored surface keeps it centered through every step).
 - **Unavailable** (GNOME, X11, or the detection call itself fails for any reason): skip layer-shell entirely, fall through to exactly today's window creation path. No crash, no behavior change, no partial/broken state.
 
 ### 3.5 What doesn't change
 
 - `alwaysOnTop`, `decorations: false`, `skipTaskbar` stay as Tauri config for the X11/fallback path — layer-shell's `Overlay` layer subsumes the always-on-top behavior on the Wayland path, but the config keys stay in place for when layer-shell isn't available.
-- The dynamic palette-resize feature (`palette::animate_to_height`) is unmodified — it already only touches size, and centering under layer-shell is a property of the anchor configuration, not something the resize code needs to know about.
+- The dynamic palette-resize feature (`palette::animate_to_height`) is unmodified — it already only touches size, and centering under layer-shell is a property of leaving both axes unanchored, not something the resize code needs to know about.
 
 ## 4. Risks and honest gaps
 
@@ -54,7 +54,7 @@ At startup, before touching either window: check whether the current Wayland dis
 
 ## 5. Testing strategy
 
-Consistent with this project's established pattern for real OS/compositor-boundary code (GlobalShortcuts portal binding, tray icon registration): the actual layer-shell surface creation and compositor-side anchoring behavior is not meaningfully unit-testable (there is no fake Wayland compositor in this test suite, and building one is out of scope for this fix). What's testable and will be:
+Consistent with this project's established pattern for real OS/compositor-boundary code (GlobalShortcuts portal binding, tray icon registration): the actual layer-shell surface creation and compositor-side placement behavior is not meaningfully unit-testable (there is no fake Wayland compositor in this test suite, and building one is out of scope for this fix). What's testable and will be:
 
 - The **detection logic** itself, if it can be structured as a pure function over "what the registry reported" rather than requiring a live connection for the branch decision.
 - The **fallback path never panics or partially applies** — this is the one behavior that must be bulletproof, and is checkable via a code-review-level guarantee (every fallible step degrades to "use the regular window," never to a half-configured state) plus manual verification.

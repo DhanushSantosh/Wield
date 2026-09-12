@@ -154,6 +154,7 @@ pub fn run() {
             commands::show_palette,
             commands::hide_palette,
             commands::hotkey_status,
+            commands::configure_hotkey,
             commands::quit
         ])
         .setup(move |app| {
@@ -220,10 +221,11 @@ pub fn run() {
             let hotkey_app = handle.clone();
             tauri::async_runtime::spawn(async move {
                 let show_app = hotkey_app.clone();
-                let outcome = wield_portal::global_shortcuts::bind_show_palette(move || {
-                    palette::show(&show_app);
-                })
-                .await;
+                let (outcome, controller) =
+                    wield_portal::global_shortcuts::bind_show_palette(move || {
+                        palette::show(&show_app);
+                    })
+                    .await;
                 let hotkey_state = match outcome {
                     wield_portal::global_shortcuts::BindOutcome::Bound => {
                         state::HotkeyState::Registered
@@ -232,9 +234,9 @@ pub fn run() {
                         fallback_command,
                     } => state::HotkeyState::Unavailable { fallback_command },
                 };
-                hotkey_app
-                    .state::<state::AppState>()
-                    .set_hotkey_state(hotkey_state);
+                let app_state = hotkey_app.state::<state::AppState>();
+                app_state.set_hotkey_state(hotkey_state);
+                app_state.set_hotkey_controller(controller);
             });
 
             tracing::info!("wield shell ready (headless)");

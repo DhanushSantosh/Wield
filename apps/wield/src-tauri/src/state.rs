@@ -42,6 +42,9 @@ pub struct AppState {
     pub availability: AvailabilityView,
     runs: Mutex<HashMap<RunId, CancellationToken>>,
     hotkey: Mutex<HotkeyState>,
+    /// Set once the startup `GlobalShortcuts` bind resolves to `Bound`; `None`
+    /// otherwise (nothing to reconfigure, or the bind hasn't finished yet).
+    hotkey_controller: Mutex<Option<wield_portal::global_shortcuts::HotkeyController>>,
 }
 
 impl AppState {
@@ -60,6 +63,7 @@ impl AppState {
             availability,
             runs: Mutex::new(HashMap::new()),
             hotkey: Mutex::new(HotkeyState::Pending),
+            hotkey_controller: Mutex::new(None),
         }
     }
 
@@ -69,6 +73,36 @@ impl AppState {
 
     pub fn set_hotkey_state(&self, state: HotkeyState) {
         *self.hotkey.lock().expect("hotkey lock") = state;
+    }
+
+    pub fn set_hotkey_controller(
+        &self,
+        controller: Option<wield_portal::global_shortcuts::HotkeyController>,
+    ) {
+        *self
+            .hotkey_controller
+            .lock()
+            .expect("hotkey controller lock") = controller;
+    }
+
+    /// Opens the desktop environment's shortcut-configuration UI so the user
+    /// can rebind the palette shortcut. Errors when there is no active
+    /// session to reconfigure (the bind never succeeded, or hasn't resolved
+    /// yet) or when the portal backend rejects the request (e.g. older than
+    /// the required v2 interface).
+    pub async fn configure_hotkey(&self) -> Result<(), String> {
+        let controller = self
+            .hotkey_controller
+            .lock()
+            .expect("hotkey controller lock")
+            .clone();
+        match controller {
+            Some(controller) => controller
+                .configure()
+                .await
+                .map_err(|error| error.to_string()),
+            None => Err("no active hotkey session to reconfigure".to_owned()),
+        }
     }
 
     pub fn register_run(&self, id: RunId, token: CancellationToken) {
@@ -101,6 +135,7 @@ impl AppState {
             availability,
             runs: Mutex::new(HashMap::new()),
             hotkey: Mutex::new(HotkeyState::Pending),
+            hotkey_controller: Mutex::new(None),
         }
     }
 
@@ -144,6 +179,7 @@ mod tests {
             availability: Default::default(),
             runs: std::sync::Mutex::new(std::collections::HashMap::new()),
             hotkey: std::sync::Mutex::new(HotkeyState::Pending),
+            hotkey_controller: std::sync::Mutex::new(None),
         }
     }
 
@@ -157,6 +193,13 @@ mod tests {
         assert!(token.is_cancelled());
         assert!(state.take_run(&id).is_some());
         assert!(!state.cancel_run(&RunId::new()));
+    }
+
+    #[tokio::test]
+    async fn configure_hotkey_errors_with_no_active_session() {
+        let state = empty_state();
+        let error = state.configure_hotkey().await.unwrap_err();
+        assert_eq!(error, "no active hotkey session to reconfigure");
     }
 
     #[test]

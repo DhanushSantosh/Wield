@@ -164,6 +164,15 @@ pub fn hotkey_status(state: tauri::State<'_, AppState>) -> crate::state::HotkeyS
     state.hotkey_state()
 }
 
+/// Opens the desktop environment's own shortcut-rebinding UI. Errors (surfaced
+/// to the frontend as a rejected promise) when there's no active portal
+/// session to reconfigure — the bind never succeeded, hasn't resolved yet, or
+/// the backend doesn't support it.
+#[tauri::command]
+pub async fn configure_hotkey(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.configure_hotkey().await
+}
+
 #[tauri::command]
 pub fn quit(app: tauri::AppHandle) {
     tracing::info!("quit requested");

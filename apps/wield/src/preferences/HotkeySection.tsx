@@ -1,4 +1,5 @@
-import type { HotkeyState } from "../lib/wield";
+import { useState } from "react";
+import { configureHotkey, type HotkeyState } from "../lib/wield";
 import "./preferences.css";
 
 // The backend only reports whether binding succeeded, not the DE-confirmed
@@ -12,15 +13,32 @@ export interface HotkeySectionProps {
 }
 
 export function HotkeySection({ status }: HotkeySectionProps) {
+  const [configureError, setConfigureError] = useState<string | null>(null);
+
   return (
     <section className="prefs-section">
       <h2>Hotkey</h2>
       {status === null || status.state === "Pending" ? (
         <p className="prefs-muted">Checking…</p>
       ) : status.state === "Registered" ? (
-        <p>
-          Global shortcut: <strong>{PREFERRED_TRIGGER}</strong> shows the palette.
-        </p>
+        <div>
+          <p>
+            Global shortcut: <strong>{PREFERRED_TRIGGER}</strong> shows the palette.
+          </p>
+          <button
+            type="button"
+            className="prefs-action"
+            onClick={() => {
+              setConfigureError(null);
+              configureHotkey().catch((error: unknown) => {
+                setConfigureError(error instanceof Error ? error.message : String(error));
+              });
+            }}
+          >
+            Change shortcut
+          </button>
+          {configureError !== null && <p className="prefs-muted">{configureError}</p>}
+        </div>
       ) : (
         <div>
           <p>

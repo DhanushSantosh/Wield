@@ -123,6 +123,15 @@ export async function hotkeyStatus(): Promise<HotkeyState> {
   return invoke<HotkeyState>("hotkey_status");
 }
 
+/**
+ * Opens the desktop environment's own shortcut-rebinding UI. Rejects when
+ * there's no active portal session to reconfigure (the bind never
+ * succeeded, hasn't resolved yet, or the backend doesn't support it).
+ */
+export async function configureHotkey(): Promise<void> {
+  return invoke<void>("configure_hotkey");
+}
+
 export async function capabilities(): Promise<CapabilitiesReport> {
   return invoke<CapabilitiesReport>("capabilities");
 }

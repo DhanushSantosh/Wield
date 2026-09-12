@@ -26,6 +26,7 @@ import {
   capabilities,
   hidePalette,
   hotkeyStatus,
+  configureHotkey,
   listTools,
   onSelectTool,
   runTool,
@@ -81,6 +82,12 @@ test("hotkeyStatus invokes hotkey_status", async () => {
   invokeMock.mockResolvedValueOnce({ state: "Registered" });
   expect(await hotkeyStatus()).toEqual({ state: "Registered" });
   expect(invokeMock).toHaveBeenCalledWith("hotkey_status");
+});
+
+test("configureHotkey invokes configure_hotkey", async () => {
+  invokeMock.mockResolvedValueOnce(undefined);
+  await configureHotkey();
+  expect(invokeMock).toHaveBeenCalledWith("configure_hotkey");
 });
 
 test("capabilities invokes capabilities", async () => {

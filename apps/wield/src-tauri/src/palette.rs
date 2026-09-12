@@ -90,19 +90,23 @@ pub fn animate_to_height(app: &AppHandle, target_height: f64) {
     let state = app.state::<crate::state::AppState>();
     let target_height = target_height.clamp(MIN_HEIGHT, MAX_HEIGHT);
     let my_generation = state.resize_generation.fetch_add(1, Ordering::SeqCst) + 1;
+    tracing::info!(target_height, "resize requested");
     // Cloning the handle (cheap) rather than the whole AppState — the async
     // task below only needs to keep re-checking the shared counter.
     let app = app.clone();
 
     tauri::async_runtime::spawn(async move {
         let (Ok(scale_factor), Ok(current)) = (window.scale_factor(), window.inner_size()) else {
+            tracing::warn!("could not read current palette size; skipping resize");
             return;
         };
         let current = current.to_logical::<f64>(scale_factor);
         let width = current.width;
         let start_height = current.height;
+        tracing::info!(start_height, target_height, "resize starting");
 
         if (start_height - target_height).abs() < 0.5 {
+            tracing::info!("resize skipped: already at target height");
             return;
         }
 
@@ -111,7 +115,8 @@ pub fn animate_to_height(app: &AppHandle, target_height: f64) {
         let state = app.state::<crate::state::AppState>();
         for (index, height) in heights.into_iter().enumerate() {
             if state.resize_generation.load(Ordering::SeqCst) != my_generation {
-                return; // superseded by a newer resize request
+                tracing::info!("resize superseded by a newer request");
+                return;
             }
             if let Err(error) = window.set_size(Size::Logical(LogicalSize { width, height })) {
                 tracing::warn!(%error, "failed to resize palette");
@@ -122,6 +127,7 @@ pub fn animate_to_height(app: &AppHandle, target_height: f64) {
                 tokio::time::sleep(step_delay).await;
             }
         }
+        tracing::info!(target_height, "resize finished");
     });
 }
 

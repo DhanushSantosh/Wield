@@ -24,12 +24,25 @@ pub fn is_available() -> bool {
 ///
 /// Layer-shell surfaces are centered by default when no edges are anchored.
 /// Anchoring opposite edges would stretch the window and make GTK ignore its
-/// requested size. On-demand keyboard mode allows Wield's existing explicit
-/// focus behavior to keep controlling when the window receives keyboard input.
+/// requested size.
+///
+/// Keyboard mode is `Exclusive`, not `OnDemand` — corrected after live
+/// testing showed `OnDemand` never actually grants this surface keyboard
+/// focus. Per the wlr-layer-shell protocol, on-demand surfaces are expected
+/// to separately *request* focus through a compositor-specific mechanism;
+/// Tauri's generic `WebviewWindow::set_focus()` doesn't do that for a
+/// layer-shell surface, so nothing ever asked for it. Pointer input still
+/// worked (clicks don't need keyboard focus), but no keyboard input ever
+/// reached the window - including Escape-to-hide and the blur-to-hide
+/// listener, which never fired because the surface never gained focus to
+/// lose. `Exclusive` grants keyboard focus automatically whenever the
+/// surface is mapped on the overlay layer, matching what a palette that's
+/// only ever shown to receive input actually needs - no separate
+/// focus-request step required.
 pub fn configure(window: &gtk::ApplicationWindow) {
     window.init_layer_shell();
     window.set_layer(Layer::Overlay);
-    window.set_keyboard_mode(KeyboardMode::OnDemand);
+    window.set_keyboard_mode(KeyboardMode::Exclusive);
 }
 
 #[cfg(test)]

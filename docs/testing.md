@@ -198,3 +198,39 @@ claimed as live keystroke-verified here. Resize-while-centered was not tested:
 the dynamic-resize feature remains on an unmerged sibling branch and this work
 was explicitly based on `master`. KDE/KWin, Sway, other wlroots compositors,
 GNOME's unsupported-protocol fallback, and X11 were not tested in this pass.
+
+### `OnDemand` doesn't work on this Hyprland version; `Exclusive` has a real tradeoff
+
+On 2026-09-13, real usage on the owner's desktop surfaced two problems the
+initial verification above didn't catch (it never actually pressed a key or
+clicked away): with `KeyboardMode::OnDemand`, neither Escape-to-hide nor
+click-away-to-hide worked — the palette could only be closed by quitting the
+whole app from the tray.
+
+Investigated with `wtype`/`ydotool` (synthetic Wayland input — far more
+reliable than manual clicking for isolating this) rather than more manual
+testing:
+
+- `OnDemand`: a synthetic `Escape` did nothing. Clicking directly inside the
+  window first, then sending `Escape`, still did nothing. `hyprctl
+  activewindow` confirmed the palette never became the focused window at
+  all after `ShowPalette`. This matches a long-standing upstream report that
+  Hyprland's `ON_DEMAND` handling doesn't behave as the protocol describes
+  (<https://github.com/hyprwm/Hyprland/issues/2264>) — on this compositor
+  version (0.56.2), it appears to just never grant focus, click or no click.
+- `Exclusive`: confirmed Escape-to-hide now works reliably. But `hyprctl
+  activewindow` stayed on the previously-active app even while the palette
+  was shown and mapped, and a real click on another window while the
+  palette was open did not register at all (the owner directly observed
+  this: "i couldnt register a click at all couldnt even click the main
+  foreground window"). This is effectively modal behavior for as long as
+  the palette is mapped, not merely "guaranteed keyboard focus" as the
+  protocol's naming might suggest.
+
+**Decision (owner, 2026-09-13):** ship `Exclusive` and document the tradeoff,
+rather than keep chasing a fully clean fix. Escape (or the tray) are the
+supported ways to dismiss the palette; click-away-to-dismiss does not work
+while it's shown. Revisit if Hyprland's `on_demand` handling improves, or if
+a different mechanism — Wield detecting an outside click itself rather than
+relying on the compositor's normal focus handoff — turns out to be worth the
+added complexity.

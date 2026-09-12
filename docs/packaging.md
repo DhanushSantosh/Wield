@@ -60,6 +60,15 @@
   P7-tools follow-up will package these dependencies.
 - **Secondary channels:** AUR, `.deb`, and `.rpm` distribution are deferred to
   a later packaging plan.
+- **The Flatpak build now needs a `gtk-layer-shell` module (not yet added).**
+  The Wayland layer-shell positioning fix (`apps/wield/src-tauri/src/layer_shell.rs`)
+  links against the system `gtk-layer-shell` library at compile time. `ci.yml`'s
+  ubuntu-latest runners now install it directly (`libgtk-layer-shell-dev`), but
+  `org.gnome.Platform`/`org.gnome.Sdk` don't bundle it — the next `release.yml`
+  tag build will fail the same way CI initially did here until a Flatpak build
+  module for `gtk-layer-shell` is added to the manifest (source tarball + a
+  meson/ninja build, the same shape of work as the still-deferred converter
+  binaries above). Flagged here rather than discovered cold on the next tag.
 
 ## Flathub submission status
 

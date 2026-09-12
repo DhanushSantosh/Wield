@@ -30,6 +30,8 @@ uuid.workspace = true
 async-trait.workspace = true
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+gtk = "0.18"
+gtk-layer-shell = { version = "0.8", features = ["v0_6"] }
 
 [dev-dependencies]
 tauri = { version = "2.9.5", features = ["test", "tray-icon"] }

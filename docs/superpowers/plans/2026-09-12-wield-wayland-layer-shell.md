@@ -4,7 +4,7 @@
 
 **Goal:** Make the palette and Preferences windows actually center on screen under Wayland (Hyprland, Sway, other wlroots compositors, KDE), where Tauri's `center: true` is a documented no-op. Detect layer-shell support at startup; use it when available, fall through to today's unchanged behavior when not (GNOME, X11, or any detection failure).
 
-**Architecture:** A new `apps/wield/src-tauri/src/layer_shell.rs` module wraps the `gtk-layer-shell` crate (GTK3 bindings — Tauri uses GTK3 on Linux, confirmed via `tao` 0.35.3's `gtk = "0.18"` dependency). One free function checks compositor support (`gtk_layer_shell::is_supported()` — the crate itself does the registry check, no hand-rolled Wayland probing needed); one function configures a given GTK window as an `Overlay`-layer surface anchored to all four screen edges (which the protocol centers automatically) with on-demand keyboard focus. Called from `setup()` in `lib.rs`, once per window, strictly before each window's first `.show()` — both windows are already created with `"visible": false` and shown later, so this fits the existing lifecycle without restructuring it.
+**Architecture:** A new `apps/wield/src-tauri/src/layer_shell.rs` module wraps the `gtk-layer-shell` crate (GTK3 bindings — Tauri uses GTK3 on Linux, confirmed via `tao` 0.35.3's `gtk = "0.18"` dependency). One free function checks compositor support (`gtk_layer_shell::is_supported()` — the crate itself does the registry check, no hand-rolled Wayland probing needed); one function configures a given GTK window as an unanchored `Overlay`-layer surface (which the protocol centers automatically) with on-demand keyboard focus. Called from `setup()` in `lib.rs`, once per window, strictly before each window's first `.show()` — both windows are already created with `"visible": false` and shown later, so this fits the existing lifecycle without restructuring it.
 
 **Tech Stack:** `gtk-layer-shell` 0.8.2 (Rust crate; confirmed installed as a system library here — `gtk-layer-shell` 0.10.1 via pacman, `pkg-config --modversion gtk-layer-shell-0` resolves). No new frontend work.
 
@@ -30,7 +30,7 @@
 
 | File | Responsibility |
 | --- | --- |
-| `apps/wield/src-tauri/src/layer_shell.rs` | `is_available()` detection wrapper; `configure(window)` — anchors a window to all four edges as an overlay-layer surface with on-demand keyboard focus |
+| `apps/wield/src-tauri/src/layer_shell.rs` | `is_available()` detection wrapper; `configure(window)` — leaves a window unanchored as a centered overlay-layer surface with on-demand keyboard focus |
 
 **Modified:**
 
@@ -51,7 +51,7 @@
 **Interfaces:**
 - Produces: `pub fn is_available() -> bool` and `pub fn configure(window: &gtk::ApplicationWindow)` — both consumed by Task 2's `lib.rs` wiring.
 
-- [ ] **Step 1: Add the dependency**
+- [x] **Step 1: Add the dependency**
 
 ```toml
 # apps/wield/src-tauri/Cargo.toml, in [dependencies]
@@ -60,7 +60,7 @@ gtk-layer-shell = "0.8"
 
 Run `cargo build -p wield-app` once just to confirm the dependency resolves against the same `gtk = "0.18"` line `tao` already pulls in — a version conflict here would show up as a type-mismatch compile error between two incompatible `gtk` crate versions, not a dependency-resolution failure. **Mechanical-correction note:** if `gtk-layer-shell`'s own `gtk` version requirement doesn't line up with `0.18`, that's a real blocker to resolve before continuing (check `gtk-layer-shell`'s published `Cargo.toml` for its exact `gtk` version pin) — do not proceed past this step with a version mismatch silently worked around.
 
-- [ ] **Step 2: Write the module**
+- [x] **Step 2: Write the module**
 
 ```rust
 //! Wayland layer-shell positioning: makes windows actually center on
@@ -74,7 +74,7 @@ Run `cargo build -p wield-app` once just to confirm the dependency resolves agai
 //! false, and the caller falls through to today's unchanged window
 //! creation.
 
-use gtk_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
+use gtk_layer_shell::{KeyboardMode, Layer, LayerShell};
 
 /// Whether the current session supports `wlr-layer-shell`. `false` on
 /// X11 (this mechanism doesn't apply there — the existing `center: true`
@@ -86,17 +86,13 @@ pub fn is_available() -> bool {
     gtk_layer_shell::is_supported()
 }
 
-/// Configures `window` as an overlay-layer surface anchored to all four
-/// screen edges — the layer-shell protocol centers a surface smaller
-/// than the output automatically once it's anchored on both axes, no
-/// manual coordinate math. Must be called before `window` is realized
+/// Configures `window` as an unanchored overlay-layer surface — the
+/// layer-shell protocol centers it on both axes without coordinate math.
+/// Must be called before `window` is realized
 /// (before its first `.show()`); calling it after has no effect.
 pub fn configure(window: &gtk::ApplicationWindow) {
     window.init_layer_shell();
     window.set_layer(Layer::Overlay);
-    for edge in [Edge::Left, Edge::Right, Edge::Top, Edge::Bottom] {
-        window.set_anchor(edge, true);
-    }
     // On-demand rather than Exclusive: Wield already drives focus itself
     // (`palette::show` calls `set_focus()` explicitly) — on-demand lets
     // that keep working rather than layer-shell forcing focus regardless
@@ -121,9 +117,9 @@ mod tests {
 }
 ```
 
-**Mechanical-correction note:** `window.init_layer_shell()` etc. assume the `LayerShell` trait is implemented for `gtk::ApplicationWindow` directly (a blanket impl over `IsA<gtk::Window>`, which `ApplicationWindow` satisfies, is the normal gtk-rs pattern) — if it isn't, upcast explicitly: `window.upcast_ref::<gtk::Window>().init_layer_shell()` (adjust every call in `configure` the same way). Note whichever it turns out to be in the Task 3 report.
+**Mechanical-correction notes:** `window.init_layer_shell()` etc. compile directly because the `LayerShell` trait has the expected blanket implementation for `gtk::ApplicationWindow`; no explicit upcast was needed. Live Hyprland verification also corrected the original four-edge proposal: gtk-layer-shell documents that opposite anchors stretch the surface and ignore its requested size. Leaving all anchors at their default `false` centers the requested-size window, which Hyprland confirmed exactly.
 
-- [ ] **Step 3: Run to verify it compiles and the test passes**
+- [x] **Step 3: Run to verify it compiles and the test passes**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -131,7 +127,7 @@ cargo test -p wield-app layer_shell::
 ```
 Expected: PASS (the one test just confirms `is_available()` doesn't panic in this headless environment — it will correctly report `false` here, since there's no live Wayland session in the test process).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/wield/src-tauri/Cargo.toml apps/wield/src-tauri/src/layer_shell.rs
@@ -149,11 +145,11 @@ git commit -m "feat(layer-shell): detection + window configuration for Wayland c
 - Consumes: `layer_shell::is_available() -> bool`, `layer_shell::configure(&gtk::ApplicationWindow)` (Task 1).
 - Needs `WebviewWindow::gtk_window(&self) -> tauri::Result<gtk::ApplicationWindow>` (confirmed present on the installed `tauri` 2.11.5) for both the `palette` and `preferences` windows.
 
-- [ ] **Step 1: Read the current `setup()` closure**
+- [x] **Step 1: Read the current `setup()` closure**
 
 Before writing this task's code, read `apps/wield/src-tauri/src/lib.rs`'s `setup()` closure in full to find: (a) where the `palette` and `preferences` `WebviewWindow` handles are obtained (likely via `app.get_webview_window("palette")` / `"preferences"`, or already in scope from earlier window-setup code), and (b) confirm neither window's `.show()` is called anywhere inside `setup()` itself (both should stay hidden at this point — `"visible": false` in `tauri.conf.json` — with showing deferred to tray/hotkey/palette-activation code that runs later). This ordering is what makes it safe to call `layer_shell::configure` here.
 
-- [ ] **Step 2: Add the wiring**
+- [x] **Step 2: Add the wiring**
 
 ```rust
 // Near the top of setup(), before anything shows a window:
@@ -181,7 +177,7 @@ Register the module:
 mod layer_shell;
 ```
 
-- [ ] **Step 3: Run the full workspace check**
+- [x] **Step 3: Run the full workspace check**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -192,7 +188,7 @@ npm run check
 ```
 Expected: PASS. (`--test-threads=1` per this project's established convention — see `docs/testing.md`'s "P7: kills_on_timeout" section.)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/wield/src-tauri/src/lib.rs
@@ -208,7 +204,7 @@ git commit -m "feat(layer-shell): wire layer-shell setup into window creation"
 
 **Interfaces:** none — this task is manual verification and honest documentation of it, matching this project's established convention for real OS/compositor-boundary behavior (GlobalShortcuts, tray) that isn't meaningfully unit-testable.
 
-- [ ] **Step 1: Rebuild and install properly**
+- [x] **Step 1: Rebuild and install properly**
 
 ```bash
 pkill -f wield-app 2>/dev/null
@@ -219,7 +215,7 @@ install -Dm755 target/release/wield-app ~/.local/bin/wield-app
 ```
 (Always build via the Tauri CLI path here, never bare `cargo build` — a bare build skips Tauri's production-mode toggle and the webview falls back to expecting a dev server; see `docs/testing.md`'s existing note on this from the P6b→P7 gap.)
 
-- [ ] **Step 2: Verify live on this Hyprland environment**
+- [x] **Step 2: Verify live on this Hyprland environment**
 
 ```bash
 gtk-launch io.github.DhanushSantosh.Wield &
@@ -233,7 +229,7 @@ Check (report honestly, whichever way it goes):
 - Open Preferences from the tray — does it also appear centered?
 - Check `~/.local/state/wield/logs/wield.log.<date>` for the `"layer-shell positioning enabled"` line to confirm detection actually took the layer-shell path (not silently falling back).
 
-- [ ] **Step 3: Write up the finding**
+- [x] **Step 3: Write up the finding**
 
 Append a section to `docs/testing.md`:
 
@@ -251,7 +247,7 @@ change doesn't touch that path — the existing `center: true` mechanism
 there is unmodified).
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/testing.md
@@ -262,7 +258,7 @@ git commit -m "docs: layer-shell positioning verification notes"
 
 ## Task 4: Workspace green + wrap-up
 
-- [ ] **Step 1: Full verification**
+- [x] **Step 1: Full verification**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -273,7 +269,7 @@ npm run check
 ```
 Expected: PASS.
 
-- [ ] **Step 2: Mark the plan complete, commit, push**
+- [x] **Step 2: Mark the plan complete, commit, push**
 
 ```bash
 git add docs/superpowers/plans/2026-09-12-wield-wayland-layer-shell.md
@@ -288,7 +284,7 @@ Then open the PR (GEON executing this directly, matching the pattern for every r
 ## Self-Review
 
 **Spec coverage:**
-- §3.1–3.2 (why layer-shell, toolchain reality) → Task 1, grounded in the actual `gtk-layer-shell` 0.8.2 API (confirmed via docs.rs, not guessed: `is_supported()`, `LayerShell` trait's `init_layer_shell`/`set_layer`/`set_anchor`/`set_keyboard_mode`, `Layer::Overlay`, `Edge::{Left,Right,Top,Bottom}`, `KeyboardMode::OnDemand`) ✓
+- §3.1–3.2 (why layer-shell, toolchain reality) → Task 1, grounded in the actual `gtk-layer-shell` 0.8.2 API and installed C-library documentation: `is_supported()`, `LayerShell` trait's `init_layer_shell`/`set_layer`/`set_keyboard_mode`, `Layer::Overlay`, and `KeyboardMode::OnDemand`; the default unanchored state is retained for centering ✓
 - §3.3 (lifecycle timing) → Task 2, explicitly checks `setup()` doesn't show windows before this code runs ✓
 - §3.4 (detection + fallback) → Task 2's `if layer_shell::is_available() { ... } else { ... }` — fails closed on any error inside the true branch too (per-window `match` handles `Err`/`None` without panicking) ✓
 - §3.5 (interaction with dynamic resize) → not additional code, verified as a live check in Task 3 (resize-while-centered) ✓

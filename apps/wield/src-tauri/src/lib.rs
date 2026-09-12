@@ -155,6 +155,7 @@ pub fn run() {
             commands::hide_palette,
             commands::hotkey_status,
             commands::configure_hotkey,
+            commands::resize_palette,
             commands::quit
         ])
         .setup(move |app| {

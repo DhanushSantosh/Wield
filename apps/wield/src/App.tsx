@@ -7,6 +7,7 @@ import {
   hidePalette,
   listTools,
   onSelectTool,
+  resizePalette,
   runTool,
   type Progress,
   type RunId,
@@ -199,6 +200,22 @@ function recentTools(tools: ToolSummary[]): ToolSummary[] {
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const attemptRef = useRef(0);
+  const shellRef = useRef<HTMLElement>(null);
+
+  // Width is fixed; height follows the shell's actual rendered content —
+  // search results, an arg form, progress, or a result card each have a
+  // different natural height, so the window shouldn't be one rigid box
+  // regardless of what's showing.
+  useEffect(() => {
+    const element = shellRef.current;
+    if (element === null) return;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height;
+      if (height !== undefined) void resizePalette(height);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const query = state.query.trim();
@@ -346,5 +363,9 @@ export default function App() {
     );
   }
 
-  return <main className="app-shell">{content}</main>;
+  return (
+    <main ref={shellRef} className="app-shell">
+      {content}
+    </main>
+  );
 }

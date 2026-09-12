@@ -189,6 +189,14 @@ pub fn hide_palette(app: tauri::AppHandle) {
     crate::palette::hide(&app);
 }
 
+/// Smoothly resizes the palette window's height to fit the frontend's
+/// actual measured content (search results, an arg form, progress, or a
+/// result card all have different natural heights). Width never changes.
+#[tauri::command]
+pub fn resize_palette(app: tauri::AppHandle, height: f64) {
+    crate::palette::animate_to_height(&app, height);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

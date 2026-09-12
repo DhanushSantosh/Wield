@@ -7,6 +7,7 @@ const listToolsMock = vi.fn();
 const runToolMock = vi.fn();
 const cancelRunMock = vi.fn();
 const hidePaletteMock = vi.fn();
+const resizePaletteMock = vi.fn();
 let selectToolHandler: ((toolId: string) => void) | undefined;
 
 vi.mock("./lib/wield", async (importOriginal) => {
@@ -17,6 +18,7 @@ vi.mock("./lib/wield", async (importOriginal) => {
     runTool: (...args: unknown[]) => runToolMock(...args),
     cancelRun: (...args: unknown[]) => cancelRunMock(...args),
     hidePalette: (...args: unknown[]) => hidePaletteMock(...args),
+    resizePalette: (...args: unknown[]) => resizePaletteMock(...args),
     onSelectTool: async (handler: (toolId: string) => void) => {
       selectToolHandler = handler;
       return () => {
@@ -89,11 +91,27 @@ beforeAll(() => {
   Object.defineProperty(window, "localStorage", { configurable: true, value: storage });
 });
 
+let resizeObserverCallback: ResizeObserverCallback | undefined;
+
+class FakeResizeObserver implements ResizeObserver {
+  constructor(callback: ResizeObserverCallback) {
+    resizeObserverCallback = callback;
+  }
+  observe() {}
+  unobserve() {}
+  disconnect() {
+    resizeObserverCallback = undefined;
+  }
+}
+
 beforeEach(() => {
   listToolsMock.mockReset().mockResolvedValue([colorTool, convertTool]);
   runToolMock.mockReset();
   cancelRunMock.mockReset().mockResolvedValue(true);
   hidePaletteMock.mockReset().mockResolvedValue(undefined);
+  resizePaletteMock.mockReset().mockResolvedValue(undefined);
+  resizeObserverCallback = undefined;
+  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   window.localStorage.clear();
 });
 
@@ -285,4 +303,14 @@ test("a tray tool-selection event for an unavailable tool does nothing", async (
   await act(async () => selectToolHandler?.("image.convert"));
   expect(runToolMock).not.toHaveBeenCalled();
   expect(screen.getByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
+});
+
+test("reports the shell's rendered height to resizePalette whenever it changes", async () => {
+  render(<App />);
+  await screen.findByText("Pick a color");
+  expect(resizeObserverCallback).toBeDefined();
+
+  const fakeEntry = { contentRect: { height: 246 } } as ResizeObserverEntry;
+  act(() => resizeObserverCallback?.([fakeEntry], {} as ResizeObserver));
+  expect(resizePaletteMock).toHaveBeenCalledWith(246);
 });

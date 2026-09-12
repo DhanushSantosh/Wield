@@ -25,6 +25,7 @@ import {
   cancelRun,
   capabilities,
   hidePalette,
+  resizePalette,
   hotkeyStatus,
   configureHotkey,
   listTools,
@@ -76,6 +77,12 @@ test("hidePalette invokes the palette hide command", async () => {
   invokeMock.mockResolvedValueOnce(undefined);
   await hidePalette();
   expect(invokeMock).toHaveBeenCalledWith("hide_palette");
+});
+
+test("resizePalette invokes resize_palette with the height", async () => {
+  invokeMock.mockResolvedValueOnce(undefined);
+  await resizePalette(240);
+  expect(invokeMock).toHaveBeenCalledWith("resize_palette", { height: 240 });
 });
 
 test("hotkeyStatus invokes hotkey_status", async () => {

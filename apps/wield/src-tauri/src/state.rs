@@ -1,6 +1,7 @@
 //! Long-lived shell state.
 
 use std::collections::HashMap;
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 use wield_core::{AvailabilityView, BinaryResolver, Executor, Registry};
@@ -45,6 +46,10 @@ pub struct AppState {
     /// Set once the startup `GlobalShortcuts` bind resolves to `Bound`; `None`
     /// otherwise (nothing to reconfigure, or the bind hasn't finished yet).
     hotkey_controller: Mutex<Option<wield_portal::global_shortcuts::HotkeyController>>,
+    /// Bumped on every palette resize request; an in-flight resize animation
+    /// checks this each step and bails out early if it no longer matches,
+    /// so only the most recent request actually finishes.
+    pub resize_generation: AtomicU64,
 }
 
 impl AppState {
@@ -64,6 +69,7 @@ impl AppState {
             runs: Mutex::new(HashMap::new()),
             hotkey: Mutex::new(HotkeyState::Pending),
             hotkey_controller: Mutex::new(None),
+            resize_generation: AtomicU64::new(0),
         }
     }
 
@@ -136,6 +142,7 @@ impl AppState {
             runs: Mutex::new(HashMap::new()),
             hotkey: Mutex::new(HotkeyState::Pending),
             hotkey_controller: Mutex::new(None),
+            resize_generation: AtomicU64::new(0),
         }
     }
 
@@ -180,6 +187,7 @@ mod tests {
             runs: std::sync::Mutex::new(std::collections::HashMap::new()),
             hotkey: std::sync::Mutex::new(HotkeyState::Pending),
             hotkey_controller: std::sync::Mutex::new(None),
+            resize_generation: AtomicU64::new(0),
         }
     }
 

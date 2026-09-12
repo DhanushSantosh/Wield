@@ -171,3 +171,30 @@ definitions (`test` and `cargo:test`) that shell out to cargo, not just
 real root-cause investigation of `CommandRunner`'s `tokio::select!` race in
 `crates/wield-core/src/command.rs` against process-reaping behavior
 specifically, not another blind mitigation attempt.
+
+## Wayland layer-shell positioning
+
+Verified live on 2026-09-12 in this project's Hyprland session. The first
+implementation followed the original design's four-edge anchoring proposal and
+incorrectly filled the compositor's entire 1920×1040 usable area. This matches
+gtk-layer-shell's installed API documentation: opposite anchors stretch a
+surface in that direction and make GTK ignore its requested size. The preview
+was stopped, the implementation was corrected to leave every edge unanchored,
+and the design and plan were amended to record the verified semantics.
+
+After rebuilding, Hyprland reported the palette as a 720×480 overlay-layer
+surface at `(2520, 320)` on the focused `eDP-1` output. That output's usable
+rectangle was `(1920, 40)` through `(3840, 1080)`, so the reported position is
+exactly centered in both axes. The surface was absent from `hyprctl clients`,
+confirming it was a layer surface rather than a regular Wayland toplevel. The
+log contained `layer-shell positioning enabled`, confirming the capability
+probe selected the intended path. Triggering Preferences through its exported
+D-Bus menu item produced a 640×480 layer surface at `(2560, 320)`, also exactly
+centered in the same usable rectangle.
+
+Keyboard entry was not synthetically injected into the user's active desktop,
+so focus is supported by the configured `KeyboardMode::OnDemand` path but not
+claimed as live keystroke-verified here. Resize-while-centered was not tested:
+the dynamic-resize feature remains on an unmerged sibling branch and this work
+was explicitly based on `master`. KDE/KWin, Sway, other wlroots compositors,
+GNOME's unsupported-protocol fallback, and X11 were not tested in this pass.

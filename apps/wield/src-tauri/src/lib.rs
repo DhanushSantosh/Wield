@@ -194,6 +194,8 @@ pub fn run() {
                 tracing::info!("layer-shell unavailable; using default window positioning");
             }
 
+            click_catcher::create_and_register(&handle);
+
             // Binding can service a pending D-Bus request by showing the
             // palette immediately, so layer-shell setup must happen first.
             setup_shell.bind(handle.clone());

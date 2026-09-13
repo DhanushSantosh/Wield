@@ -15,7 +15,6 @@ use tauri::{AppHandle, Manager};
 /// same fail-closed gate the palette's own positioning already uses, so
 /// `AppState::show_click_catcher`/`hide_click_catcher` staying no-ops in
 /// that case is the *intended* fallback, not a bug to fix later.
-#[allow(dead_code)]
 pub fn create_and_register(app: &AppHandle) {
     if !crate::layer_shell::is_available() {
         return;

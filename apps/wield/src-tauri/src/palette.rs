@@ -47,7 +47,10 @@ pub fn show(app: &AppHandle) {
     // thread-safe to touch from anywhere else.
     let for_main_thread = window.clone();
     if let Err(error) = window.run_on_main_thread(move || match for_main_thread.gtk_window() {
-        Ok(gtk_window) => crate::layer_shell::force_commit(&gtk_window),
+        Ok(gtk_window) => {
+            let gtk_window: &gtk::Window = gtk_window.as_ref();
+            crate::layer_shell::force_commit(gtk_window)
+        }
         Err(error) => tracing::warn!(%error, "could not get GTK handle to force-commit palette"),
     }) {
         tracing::warn!(%error, "failed to dispatch palette force-commit to the main thread");

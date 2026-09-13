@@ -137,9 +137,8 @@ fn force_commit_fn() -> Option<ForceCommitFn> {
 /// `window` was never turned into a layer surface in the first place (the
 /// X11/GNOME fallback path) — calling the underlying C function on a
 /// non-layer window is undefined behavior, so this checks first.
-pub fn force_commit(window: &gtk::ApplicationWindow) {
+pub fn force_commit(window: &gtk::Window) {
     use gtk::glib::translate::ToGlibPtr;
-    let window: &gtk::Window = window.as_ref();
     if !window.is_layer_window() {
         return;
     }

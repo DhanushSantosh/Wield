@@ -46,12 +46,20 @@ pub fn show(app: &AppHandle) {
     // thread, and raw GTK objects (what gtk_window() returns) are not
     // thread-safe to touch from anywhere else.
     let for_main_thread = window.clone();
-    if let Err(error) = window.run_on_main_thread(move || match for_main_thread.gtk_window() {
-        Ok(gtk_window) => {
-            let gtk_window: &gtk::Window = gtk_window.as_ref();
-            crate::layer_shell::force_commit(gtk_window)
+    let app_for_main_thread = app.clone();
+    if let Err(error) = window.run_on_main_thread(move || {
+        match for_main_thread.gtk_window() {
+            Ok(gtk_window) => {
+                let gtk_window: &gtk::Window = gtk_window.as_ref();
+                crate::layer_shell::force_commit(gtk_window);
+            }
+            Err(error) => {
+                tracing::warn!(%error, "could not get GTK handle to force-commit palette")
+            }
         }
-        Err(error) => tracing::warn!(%error, "could not get GTK handle to force-commit palette"),
+        app_for_main_thread
+            .state::<crate::state::AppState>()
+            .show_click_catcher();
     }) {
         tracing::warn!(%error, "failed to dispatch palette force-commit to the main thread");
     }
@@ -62,10 +70,25 @@ pub fn show(app: &AppHandle) {
 }
 
 pub fn hide(app: &AppHandle) {
-    if let Some(window) = window(app) {
-        if let Err(error) = window.hide() {
-            tracing::warn!(%error, "failed to hide palette");
-        }
+    let Some(window) = window(app) else {
+        return;
+    };
+    if let Err(error) = window.hide() {
+        tracing::warn!(%error, "failed to hide palette");
+    }
+    // Dispatched via run_on_main_thread: hide() is called from the
+    // click-catcher's own GTK signal handler (already on the main
+    // thread - harmless to dispatch again from there) but also from the
+    // D-Bus ShowPalette-adjacent paths and the frontend's Escape/blur
+    // handlers, which are not guaranteed to be - same reasoning as
+    // show()'s existing dispatch above.
+    let app_for_main_thread = app.clone();
+    if let Err(error) = window.run_on_main_thread(move || {
+        app_for_main_thread
+            .state::<crate::state::AppState>()
+            .hide_click_catcher();
+    }) {
+        tracing::warn!(%error, "failed to dispatch click-catcher hide to the main thread");
     }
 }
 

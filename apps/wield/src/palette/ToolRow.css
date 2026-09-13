@@ -1,7 +1,7 @@
 .tool-row {
   position: relative;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) minmax(0, auto);
+  grid-template-columns: 34px minmax(0, auto) minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -49,6 +49,7 @@
 }
 
 .tool-row__title {
+  max-width: 280px;
   overflow: hidden;
   font-size: 14px;
   text-overflow: ellipsis;

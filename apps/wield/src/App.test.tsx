@@ -335,7 +335,7 @@ test("reports the shell's rendered height to resizePalette whenever it changes",
 test("the settings gear opens settings, and its close button returns to search", async () => {
   render(<App />);
   await userEvent.click(await screen.findByRole("button", { name: "Open settings" }));
-  expect(await screen.findByText(/Super\+W/)).toBeInTheDocument();
+  expect(await screen.findByText(/Super\+Space/)).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Close settings" }));
   expect(await screen.findByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
 });
@@ -343,7 +343,7 @@ test("the settings gear opens settings, and its close button returns to search",
 test("Escape closes settings back to search", async () => {
   render(<App />);
   await userEvent.click(await screen.findByRole("button", { name: "Open settings" }));
-  await screen.findByText(/Super\+W/);
+  await screen.findByText(/Super\+Space/);
   fireEvent.keyDown(window, { key: "Escape" });
   expect(await screen.findByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
 });
@@ -352,5 +352,5 @@ test("a tray open-settings event opens settings the same way the gear does", asy
   render(<App />);
   await screen.findByText("Pick a color");
   await act(async () => openSettingsHandler?.());
-  expect(await screen.findByText(/Super\+W/)).toBeInTheDocument();
+  expect(await screen.findByText(/Super\+Space/)).toBeInTheDocument();
 });

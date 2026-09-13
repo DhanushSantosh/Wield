@@ -11,7 +11,7 @@ test("renders all three sections", () => {
       onClose={vi.fn()}
     />,
   );
-  expect(screen.getByText(/Super\+W/)).toBeInTheDocument();
+  expect(screen.getByText(/Super\+Space/)).toBeInTheDocument();
   expect(
     screen.getByRole("checkbox", { name: /hide the palette when it loses focus/i }),
   ).toBeInTheDocument();

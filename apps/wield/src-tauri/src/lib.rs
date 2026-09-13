@@ -217,7 +217,7 @@ pub fn run() {
                 tracing::warn!(%error, "failed to build tray icon");
             }
 
-            // GlobalShortcuts: bind "show palette" to <Super>w. ashpd 0.13 has
+            // GlobalShortcuts: bind "show palette" to <Super>space. ashpd 0.13 has
             // no session-restore token for this portal, so the desktop
             // environment's confirmation dialog reappears every launch — see
             // docs/testing.md. Never blocks startup either way.

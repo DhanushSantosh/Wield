@@ -29,7 +29,7 @@ test("shows a loading state while pending", () => {
 
 test("shows the bound shortcut and a working Change shortcut button when registered", async () => {
   render(<HotkeySection status={{ state: "Registered" }} />);
-  expect(screen.getByText(/Super\+W/)).toBeInTheDocument();
+  expect(screen.getByText(/Super\+Space/)).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: /change shortcut/i }));
   expect(configureHotkeyMock).toHaveBeenCalledWith();
 });

@@ -17,7 +17,17 @@ use futures_util::StreamExt;
 pub const SHORTCUT_ID: &str = "show-palette";
 /// Preferred trigger hint; the desktop environment's own binding UI is
 /// authoritative and may offer the user something else.
-pub const PREFERRED_TRIGGER: &str = "<Super>w";
+///
+/// `<Super>space` mirrors Spotlight's Cmd+Space rather than being an
+/// arbitrary pick — matches this project's own "native, Mac-app-quality"
+/// design goal. Was `<Super>w` originally; changed after live testing
+/// found it silently conflicting with an existing compositor-level
+/// keybind ("App: Browser") on at least one real setup — the portal
+/// reported the bind as registered, but Hyprland's own keybind claimed
+/// the key combo first, so it never actually reached Wield. `hyprctl
+/// binds` is the way to check a given system for this class of conflict
+/// before assuming "registered" means "reachable".
+pub const PREFERRED_TRIGGER: &str = "<Super>space";
 /// Shown to the user when the portal is unavailable, to bind in their DE's
 /// own keyboard-shortcut settings. There is no dedicated "show palette" CLI
 /// verb (`wield-cli` only runs one-shot tools by id) — relaunching the shell

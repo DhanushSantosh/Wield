@@ -6,7 +6,7 @@ import "./preferences.css";
 // trigger — this is the preferred trigger wield-portal::global_shortcuts
 // requests. If the backend ever reports the actual confirmed trigger this
 // should read from that instead.
-const PREFERRED_TRIGGER = "Super+W";
+const PREFERRED_TRIGGER = "Super+Space";
 
 export interface HotkeySectionProps {
   status: HotkeyState | null;

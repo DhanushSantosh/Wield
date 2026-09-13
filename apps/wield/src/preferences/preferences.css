@@ -1,15 +1,3 @@
-.prefs-page {
-  padding: 24px 28px;
-  color: var(--text);
-  max-width: 640px;
-}
-
-.prefs-page h1 {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0 0 20px;
-}
-
 .prefs-section {
   margin-bottom: 28px;
 }

@@ -432,3 +432,43 @@ hit a real, qualitatively different code path (whole-surface-opaque
 inference) than even a small nonzero one. When chasing a "make the gap
 smaller" request, verify the *smallest* gap that still works before
 assuming zero is just the limit of the same trend.
+
+### The Preferences window had no way to close itself — merged into the palette instead
+
+Also on 2026-09-13: opening Preferences (tray → "Preferences") left a
+window on screen with no way to dismiss it. `KeyboardMode::Exclusive`
+(the same tradeoff already accepted and documented for the palette)
+meant clicking anywhere else did nothing, and unlike the palette,
+Preferences had no Escape handler and no close button at all — nothing
+in its own code path ever called `preferences::hide()`. The only way
+out was killing the whole process.
+
+Rather than give the Preferences window its own copy of every fix
+already made for the palette (Escape handling, a close affordance,
+`resizable: false` for the exact same alpha-stuck-at-0 flake docs above
+already root-caused, and - discovered while fixing that - a *second*,
+new bug where an unanchored non-resizable layer-shell window with no
+active height constraint grew to the full monitor height instead of the
+requested 480px), Preferences was folded into the palette's own view
+state machine instead (`App.tsx`'s `View` union gained a `"settings"`
+member, rendering `SettingsView`). It inherits the palette's already-
+solid show/hide/resize/keyboard/layer-shell handling for free - there
+is only ever one window to keep correct now, not two.
+
+A gear icon in the search bar's input row opens it; an X button and
+Escape both return to search, exactly like the existing `"form"` view.
+The tray's "Preferences" item now emits a `tray://open-settings` event
+and shows the palette, mirroring the existing tool-selection path,
+instead of showing a second window that no longer exists.
+
+The Settings content (Hotkey / Palette behaviour / System status) is
+tall enough - the portal-support table alone lists twenty-plus rows -
+that it needs its own scroll region (`max-height` + `overflow-y: auto`
+on `.settings-view__body`) rather than letting the palette's own
+`animate_to_height` grow to fit all of it; MAX_HEIGHT there is 640px,
+well short of the full list.
+
+**Lesson**: a second window means a second copy of every fix already
+made for the first one, indefinitely - a real reason to prefer folding
+a secondary UI into an already-hardened surface over giving it its own
+window, when the UI doesn't specifically need one.

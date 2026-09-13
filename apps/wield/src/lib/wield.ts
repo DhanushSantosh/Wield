@@ -146,3 +146,14 @@ export async function onSelectTool(handler: (toolId: string) => void): Promise<(
   const { listen } = await import("@tauri-apps/api/event");
   return listen<string>("tray://select-tool", (event) => handler(event.payload));
 }
+
+/**
+ * Subscribes to the tray's "Preferences" selection. Settings lives inside
+ * the palette window as its own view (see App.tsx) rather than a separate
+ * window, so opening it from the tray needs an event the same way
+ * tool-selection does, not a second window to show.
+ */
+export async function onOpenSettings(handler: () => void): Promise<() => void> {
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen<void>("tray://open-settings", () => handler());
+}

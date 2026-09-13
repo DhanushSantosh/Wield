@@ -6,6 +6,21 @@ use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 use wield_core::{AvailabilityView, BinaryResolver, Executor, Registry};
 
+/// Wraps a GTK object so it can live behind `AppState`'s `Send + Sync`
+/// bound (required by Tauri's `.manage()`). Actually touching the inner
+/// value is only sound from the GTK main thread - every access in this
+/// codebase already goes through `WebviewWindow::run_on_main_thread`
+/// first before touching a raw GTK object for exactly this reason (see
+/// `palette::show`/`force_commit`); `AppState::show_click_catcher` and
+/// `hide_click_catcher` below carry that same requirement in their own
+/// doc comments rather than re-deriving thread-safety here.
+struct MainThreadOnly<T>(T);
+
+// SAFETY: `T` (a raw GTK object) is not actually `Send`. This is sound
+// only because nothing in this codebase ever touches the wrapped value
+// except from the GTK main thread - see the struct's own doc comment.
+unsafe impl<T> Send for MainThreadOnly<T> {}
+
 /// Stable identifier for one in-flight execution.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct RunId(pub String);
@@ -50,6 +65,12 @@ pub struct AppState {
     /// checks this each step and bails out early if it no longer matches,
     /// so only the most recent request actually finishes.
     pub resize_generation: AtomicU64,
+    /// The full-screen, invisible layer-shell surface that dismisses the
+    /// palette on an outside click (see click_catcher.rs). `None` until
+    /// `click_catcher::create_and_register` runs during setup, and always
+    /// `None` on X11/GNOME (layer-shell unavailable) - every access must
+    /// degrade gracefully rather than panic.
+    click_catcher: Mutex<Option<MainThreadOnly<gtk::Window>>>,
 }
 
 impl AppState {
@@ -70,6 +91,7 @@ impl AppState {
             hotkey: Mutex::new(HotkeyState::Pending),
             hotkey_controller: Mutex::new(None),
             resize_generation: AtomicU64::new(0),
+            click_catcher: Mutex::new(None),
         }
     }
 
@@ -89,6 +111,46 @@ impl AppState {
             .hotkey_controller
             .lock()
             .expect("hotkey controller lock") = controller;
+    }
+
+    /// Registers the click-catcher window created during setup. Called
+    /// once, from `click_catcher::create_and_register`, which already
+    /// runs on the GTK main thread (inside Tauri's `setup()` closure).
+    pub fn set_click_catcher(&self, window: gtk::Window) {
+        *self.click_catcher.lock().expect("click catcher lock") = Some(MainThreadOnly(window));
+    }
+
+    /// Shows the click-catcher alongside the palette, and force-commits
+    /// it (see layer_shell::force_commit) exactly like palette::show()
+    /// does for the palette itself - the same class of surface, exposed
+    /// to the same flake. A no-op if it was never created (X11/GNOME) or
+    /// hasn't been registered yet. Must only be called from the GTK main
+    /// thread - see `MainThreadOnly`.
+    pub fn show_click_catcher(&self) {
+        use gtk::prelude::WidgetExt;
+        if let Some(MainThreadOnly(window)) = self
+            .click_catcher
+            .lock()
+            .expect("click catcher lock")
+            .as_ref()
+        {
+            window.show();
+            crate::layer_shell::force_commit(window);
+        }
+    }
+
+    /// Hides the click-catcher alongside the palette. Same no-op and
+    /// main-thread requirements as `show_click_catcher`.
+    pub fn hide_click_catcher(&self) {
+        use gtk::prelude::WidgetExt;
+        if let Some(MainThreadOnly(window)) = self
+            .click_catcher
+            .lock()
+            .expect("click catcher lock")
+            .as_ref()
+        {
+            window.hide();
+        }
     }
 
     /// Opens the desktop environment's shortcut-configuration UI so the user
@@ -143,6 +205,7 @@ impl AppState {
             hotkey: Mutex::new(HotkeyState::Pending),
             hotkey_controller: Mutex::new(None),
             resize_generation: AtomicU64::new(0),
+            click_catcher: Mutex::new(None),
         }
     }
 
@@ -188,6 +251,7 @@ mod tests {
             hotkey: std::sync::Mutex::new(HotkeyState::Pending),
             hotkey_controller: std::sync::Mutex::new(None),
             resize_generation: AtomicU64::new(0),
+            click_catcher: std::sync::Mutex::new(None),
         }
     }
 
@@ -225,5 +289,15 @@ mod tests {
                 fallback_command: "wield-app".into()
             }
         );
+    }
+
+    #[test]
+    fn click_catcher_show_and_hide_are_safe_noops_before_its_set() {
+        let state = empty_state();
+        // Nothing was ever created (mirrors the X11/GNOME fallback path,
+        // or the brief startup window before setup() runs) - these must
+        // not panic.
+        state.show_click_catcher();
+        state.hide_click_catcher();
     }
 }

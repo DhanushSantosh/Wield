@@ -1,6 +1,27 @@
 import { open } from "@tauri-apps/plugin-dialog";
+import { hidePalette, showPalette } from "../lib/wield";
 import type { ArgSpec } from "../lib/wield";
 import "./FormField.css";
+
+/**
+ * Runs a native file/folder picker with the palette hidden for its
+ * duration. The palette holds KeyboardMode::Exclusive while shown (see
+ * layer_shell.rs) - real, needed for Escape-to-hide to work reliably,
+ * but it also blocks pointer/keyboard input to *every* other surface,
+ * including a dialog this app just spawned itself. Hiding first fully
+ * unmaps the layer-shell surface, releasing that grab so the dialog is
+ * actually usable; showing it again afterward - in a `finally`, so a
+ * cancelled or failed dialog doesn't strand the user with no window at
+ * all - returns them to the form they were filling in.
+ */
+async function withPaletteHidden<T>(task: () => Promise<T>): Promise<T> {
+  await hidePalette();
+  try {
+    return await task();
+  } finally {
+    await showPalette();
+  }
+}
 
 export interface FormFieldProps {
   spec: ArgSpec;
@@ -22,13 +43,15 @@ export function FormField({ spec, value, onChange }: FormFieldProps) {
   if (typeof spec.arg_type === "object" && "File" in spec.arg_type) {
     const { filters, multiple } = spec.arg_type.File;
     const chooseFile = async () => {
-      const selection = await open({
-        multiple,
-        filters: filters.map((filter) => ({
-          name: filter.label,
-          extensions: filter.extensions,
-        })),
-      });
+      const selection = await withPaletteHidden(() =>
+        open({
+          multiple,
+          filters: filters.map((filter) => ({
+            name: filter.label,
+            extensions: filter.extensions,
+          })),
+        }),
+      );
       if (selection !== null) {
         onChange(selection);
       }
@@ -47,7 +70,7 @@ export function FormField({ spec, value, onChange }: FormFieldProps) {
 
   if (spec.arg_type === "Dir") {
     const chooseFolder = async () => {
-      const selection = await open({ directory: true });
+      const selection = await withPaletteHidden(() => open({ directory: true }));
       if (selection !== null) {
         onChange(selection);
       }

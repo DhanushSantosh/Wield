@@ -1,14 +1,30 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, test, vi } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 
 const openMock = vi.fn();
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: (...args: unknown[]) => openMock(...args),
 }));
 
+const hidePaletteMock = vi.fn();
+const showPaletteMock = vi.fn();
+vi.mock("../lib/wield", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../lib/wield")>();
+  return {
+    ...original,
+    hidePalette: (...args: unknown[]) => hidePaletteMock(...args),
+    showPalette: (...args: unknown[]) => showPaletteMock(...args),
+  };
+});
+
 import type { ArgSpec } from "../lib/wield";
 import { FormField } from "./FormField";
+
+beforeEach(() => {
+  hidePaletteMock.mockReset().mockResolvedValue(undefined);
+  showPaletteMock.mockReset().mockResolvedValue(undefined);
+});
 
 function spec(argType: ArgSpec["arg_type"]): ArgSpec {
   return {
@@ -47,6 +63,33 @@ test("Dir opens a folder picker and returns the selected path", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Choose a folder…" }));
   expect(openMock).toHaveBeenCalledWith({ directory: true });
   expect(onChange).toHaveBeenCalledWith("/tmp/output");
+});
+
+test("File hides the palette before opening the dialog and shows it again after", async () => {
+  const callOrder: string[] = [];
+  hidePaletteMock.mockImplementation(async () => {
+    callOrder.push("hide");
+  });
+  openMock.mockImplementation(async () => {
+    callOrder.push("open");
+    return "/tmp/photo.png";
+  });
+  showPaletteMock.mockImplementation(async () => {
+    callOrder.push("show");
+  });
+  render(
+    <FormField
+      spec={spec({ File: { filters: [], multiple: false } })}
+      value={undefined}
+      onChange={vi.fn()}
+    />,
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Choose a file…" }));
+  // KeyboardMode::Exclusive (layer_shell.rs) blocks input to every other
+  // surface while the palette is shown, including a dialog this app just
+  // opened itself - hiding first, showing again after is what makes the
+  // dialog actually usable.
+  expect(callOrder).toEqual(["hide", "open", "show"]);
 });
 
 test("Str returns text input changes", () => {

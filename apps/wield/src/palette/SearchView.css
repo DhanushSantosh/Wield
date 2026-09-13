@@ -2,7 +2,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 18px 20px 16px;
+  padding: 18px 18px 16px;
 }
 
 .search-view__prompt {
@@ -29,7 +29,7 @@
 }
 
 .section-label {
-  padding: 14px 20px 6px;
+  padding: 14px 18px 6px;
   color: var(--text-faint);
   font-size: 11px;
 }

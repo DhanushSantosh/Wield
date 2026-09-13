@@ -33,10 +33,19 @@
 }
 
 .tool-row__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 30px;
   height: 30px;
   border-radius: 8px;
   background: var(--surface);
+  color: var(--text-muted);
+}
+
+.category-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .tool-row__title {

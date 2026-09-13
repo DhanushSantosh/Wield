@@ -94,29 +94,48 @@ pub fn configure(window: &gtk::ApplicationWindow, top_margin_px: Option<i32>, na
     }
 }
 
-// `gtk_layer_try_force_commit` is declared by hand: it exists in the
-// installed system library (confirmed: this dev machine has
-// gtk-layer-shell 0.10.1) but isn't exposed by either the safe
-// `gtk-layer-shell` crate (0.8.2) or its `-sys` bindings (0.7.2) - it was
-// added to the C library after these Rust bindings were last updated
-// (crates.io's own description of the crate is literally "UNMAINTAINED").
-// The C header documents it for exactly the situation observed live here:
-// "the surface is in a state where it does not receive frame callbacks and
-// the regular deferred commit mechanism is unavailable." Confirmed via
-// repeated `grim` screenshots that this isn't hypothetical: the palette is
-// intermittently non-deterministically fully unrendered (hyprctl reports
-// it mapped at the correct geometry; nothing is actually painted) on
-// repeated identical launches of identical builds - a real, observed flake
-// this function's own documentation directly describes.
-extern "C" {
-    fn gtk_layer_try_force_commit(window: *mut gtk_sys::GtkWindow);
+type ForceCommitFn = unsafe extern "C" fn(*mut gtk_sys::GtkWindow);
+
+/// Resolves `gtk_layer_try_force_commit` from whatever gtk-layer-shell
+/// shared library is already loaded into this process, instead of
+/// declaring it as a hard `extern "C"` link-time dependency.
+///
+/// It exists in the system library on the primary dev machine (confirmed:
+/// gtk-layer-shell 0.10.1 there) but isn't exposed by either the safe
+/// `gtk-layer-shell` crate (0.8.2) or its `-sys` bindings (0.7.2) - it was
+/// added to the C library after these Rust bindings were last updated
+/// (crates.io's own description of the crate is literally "UNMAINTAINED").
+/// The C header documents it for exactly the situation this works around:
+/// "the surface is in a state where it does not receive frame callbacks and
+/// the regular deferred commit mechanism is unavailable." Confirmed via
+/// repeated `grim` screenshots that this isn't hypothetical: the palette
+/// was intermittently, non-deterministically fully unrendered (hyprctl
+/// reported it mapped at the correct geometry; nothing was actually
+/// painted) on repeated identical launches of identical builds.
+///
+/// A hard `extern "C"` declaration was tried first and failed CI outright:
+/// GitHub's ubuntu-latest runners install an older `libgtk-layer-shell-dev`
+/// that doesn't export this symbol at all, so linking `wield-app` failed
+/// with "undefined symbol: gtk_layer_try_force_commit" - a real portability
+/// gap the local dev machine's newer system library couldn't have caught.
+/// Resolving it at runtime instead means an absent symbol is just "this
+/// build doesn't have the workaround" (`None`, handled the same as the
+/// X11/GNOME fallback path below), not a build failure - on *any* system,
+/// not just CI's.
+fn force_commit_fn() -> Option<ForceCommitFn> {
+    const SYMBOL: &[u8] = b"gtk_layer_try_force_commit\0";
+    unsafe {
+        let process = libloading::os::unix::Library::this();
+        let symbol = process.get::<ForceCommitFn>(SYMBOL).ok()?;
+        Some(*symbol)
+    }
 }
 
-/// Forces a pending surface commit if GTK hasn't already scheduled one.
-/// Works around a real, observed gtk-layer-shell flake (see the
-/// `extern "C"` block above) rather than a hypothetical one. A no-op on a
-/// window that was never turned into a layer surface in the first place
-/// (the X11/GNOME fallback path) — calling the underlying C function on a
+/// Forces a pending surface commit if GTK hasn't already scheduled one and
+/// the system's gtk-layer-shell exposes the C function that does it (see
+/// [`force_commit_fn`]). A no-op if the symbol isn't available, or if
+/// `window` was never turned into a layer surface in the first place (the
+/// X11/GNOME fallback path) — calling the underlying C function on a
 /// non-layer window is undefined behavior, so this checks first.
 pub fn force_commit(window: &gtk::ApplicationWindow) {
     use gtk::glib::translate::ToGlibPtr;
@@ -124,8 +143,11 @@ pub fn force_commit(window: &gtk::ApplicationWindow) {
     if !window.is_layer_window() {
         return;
     }
+    let Some(force_commit_fn) = force_commit_fn() else {
+        return;
+    };
     unsafe {
-        gtk_layer_try_force_commit(window.to_glib_none().0);
+        force_commit_fn(window.to_glib_none().0);
     }
 }
 

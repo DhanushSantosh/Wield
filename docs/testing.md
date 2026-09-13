@@ -472,3 +472,45 @@ well short of the full list.
 made for the first one, indefinitely - a real reason to prefer folding
 a secondary UI into an already-hardened surface over giving it its own
 window, when the UI doesn't specifically need one.
+
+### CI failed on the `force_commit` fix: a hard link-time dependency the dev machine couldn't have caught
+
+Opening PR #10, CI failed both jobs with `undefined symbol:
+gtk_layer_try_force_commit` at the link step - `wield-app` itself
+wouldn't link. The dev machine's local build was, and had always been,
+completely unaffected.
+
+Cause: `force_commit`'s `extern "C" { fn gtk_layer_try_force_commit(...); }`
+block (see above) makes the symbol a *hard link-time requirement* -
+the linker fails outright if it's not in whatever `libgtk-layer-shell`
+the build machine has installed. The dev machine has 0.10.1, new enough
+to export it. GitHub's `ubuntu-latest` runners install an older
+`libgtk-layer-shell-dev` via `apt` (added for CI in PR #9's own fix,
+before this function existed) that doesn't. This was never a CI
+environment gap to patch (there's no newer package to install to) - the
+symbol may just not exist on a given system, exactly as the function's
+own doc comment already says.
+
+Fixed by resolving the symbol at runtime instead of at link time:
+`libloading::os::unix::Library::this()` (a handle to the current
+process's own already-loaded symbol table - gtk-layer-shell is already
+linked in via `gtk-layer-shell-sys`, just not necessarily *this*
+symbol) plus `.get::<fn(...)>(b"gtk_layer_try_force_commit\0")`. Missing
+now means `None`, handled identically to the existing "not a layer
+window" no-op case - not a build failure, on *any* system, not only CI.
+`libloading` pinned to 0.7 in `Cargo.toml` to match the version already
+resolved transitively (via `tray-icon`'s own `dlopen2` dependency)
+rather than compiling a second copy.
+
+Confirmed after the fix: `cargo build --release` links clean, and a
+fresh 3/3 launch-and-check-alpha spot-check on the dev machine still
+shows the workaround actually firing (`alpha: 1` every time) - the
+runtime lookup finds and calls the same symbol just as reliably as the
+hard-linked version did there.
+
+**Lesson**: a workaround built against "the C header documents this
+function" is still only as portable as the *library version* that
+exports it. A local build succeeding proves nothing about a symbol's
+portability - only CI (or another machine) surfaces that gap. Prefer a
+runtime lookup over `extern "C"` for any symbol whose presence isn't
+guaranteed by the crate's own declared version.

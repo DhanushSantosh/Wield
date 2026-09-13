@@ -4626,6 +4626,7 @@ dependencies = [
  "async-trait",
  "gtk",
  "gtk-layer-shell",
+ "gtk-sys",
  "serde",
  "serde_json",
  "tauri",

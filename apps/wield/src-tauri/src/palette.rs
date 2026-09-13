@@ -36,6 +36,22 @@ pub fn show(app: &AppHandle) {
     if let Err(error) = window.set_focus() {
         tracing::warn!(%error, "failed to focus palette");
     }
+    // Works around an observed gtk-layer-shell flake where the surface is
+    // mapped (correct geometry, everything correct at the protocol level)
+    // but never actually commits a visible frame - see
+    // layer_shell::force_commit's own doc comment. A no-op on the
+    // X11/GNOME fallback path (force_commit checks is_layer_window itself).
+    // Dispatched via run_on_main_thread: this fn is called from the D-Bus
+    // ShowPalette handler, not guaranteed to already be on the GTK main
+    // thread, and raw GTK objects (what gtk_window() returns) are not
+    // thread-safe to touch from anywhere else.
+    let for_main_thread = window.clone();
+    if let Err(error) = window.run_on_main_thread(move || match for_main_thread.gtk_window() {
+        Ok(gtk_window) => crate::layer_shell::force_commit(&gtk_window),
+        Err(error) => tracing::warn!(%error, "could not get GTK handle to force-commit palette"),
+    }) {
+        tracing::warn!(%error, "failed to dispatch palette force-commit to the main thread");
+    }
     tracing::info!(
         elapsed_ms = started.elapsed().as_millis() as u64,
         "palette shown"

@@ -234,3 +234,56 @@ while it's shown. Revisit if Hyprland's `on_demand` handling improves, or if
 a different mechanism — Wield detecting an outside click itself rather than
 relying on the compositor's normal focus handoff — turns out to be worth the
 added complexity.
+
+### The palette intermittently failed to render at all — root-caused and fixed
+
+Also on 2026-09-13, real usage surfaced something more severe than the
+keyboard-focus tradeoff above: the palette sometimes didn't visually appear
+at all after `ShowPalette` — `hyprctl layers` still reported it mapped at
+the correct, centered geometry, but nothing was actually painted, letting
+whatever was underneath show through untouched.
+
+Confirmed with `grim` (a native Wayland screenshot tool — far more reliable
+for this than manual observation or the general-purpose screenshot tooling
+used earlier in this project's history): captured the exact screen region
+the palette should occupy and got a picture of a completely unrelated
+window instead. Initially suspected this was specific to the (at-the-time
+untested) combination of the dynamic-resize feature with layer-shell — a
+`set_size()` call not participating correctly in a layer-shell surface's
+own configure/commit handshake. That turned out to be a real, separate bug
+(fixed regardless — see the `palette::animate_to_height` commit — Tauri's
+generic `set_size()` doesn't work correctly on a layer-shell surface;
+gtk-layer-shell's own docs specify `set_size_request()` + `resize(1, 1)`
+instead), but re-testing the *simplest possible* build (layer-shell only,
+no resize code at all, identical binary re-launched fresh) still failed
+non-deterministically — proving it wasn't resize-specific at all, just a
+general layer-shell rendering flake.
+
+This matches a real, documented gtk-layer-shell C-library function:
+`gtk_layer_try_force_commit()`, whose own doc comment describes exactly
+this scenario — "the surface is in a state where it does not receive frame
+callbacks and the regular deferred commit mechanism is unavailable." That
+function isn't exposed by either the safe `gtk-layer-shell` crate (0.8.2)
+or its `-sys` bindings (0.7.2) — added to the C library after these
+(already-unmaintained) Rust bindings were last updated. Declared it by
+hand as a minimal `extern "C"` binding (`apps/wield/src-tauri/src/layer_shell.rs`,
+`force_commit`) and call it right after `window.show()` in
+`palette::show()`.
+
+**Verified**: 5 consecutive fresh launches (new process, `ShowPalette`,
+`grim` screenshot, every time) all rendered correctly after this fix, versus
+frequent failures before it. Not an absolute guarantee — the underlying
+flake's exact trigger condition was never fully understood, only worked
+around via the mechanism the C library's own author built for exactly this
+situation — but a meaningful, real, repeatably-verified improvement, not
+a guess.
+
+A second real bug was caught and fixed in the process of building this: the
+first version of the `force_commit` call touched a raw GTK object directly
+from `palette::show()` without dispatching through
+`WebviewWindow::run_on_main_thread()` first. Since `show()` is invoked from
+the D-Bus `ShowPalette` handler (not guaranteed to already be on the GTK
+main thread) and raw GTK objects are not thread-safe, this caused the
+`ShowPalette` D-Bus call to hang outright (`busctl` reported "Connection
+timed out"). Fixed by wrapping the same way the resize code already
+correctly does.

@@ -62,6 +62,41 @@ pub fn configure(window: &gtk::ApplicationWindow) {
     window.set_keyboard_mode(KeyboardMode::Exclusive);
 }
 
+// `gtk_layer_try_force_commit` is declared by hand: it exists in the
+// installed system library (confirmed: this dev machine has
+// gtk-layer-shell 0.10.1) but isn't exposed by either the safe
+// `gtk-layer-shell` crate (0.8.2) or its `-sys` bindings (0.7.2) - it was
+// added to the C library after these Rust bindings were last updated
+// (crates.io's own description of the crate is literally "UNMAINTAINED").
+// The C header documents it for exactly the situation observed live here:
+// "the surface is in a state where it does not receive frame callbacks and
+// the regular deferred commit mechanism is unavailable." Confirmed via
+// repeated `grim` screenshots that this isn't hypothetical: the palette is
+// intermittently non-deterministically fully unrendered (hyprctl reports
+// it mapped at the correct geometry; nothing is actually painted) on
+// repeated identical launches of identical builds - a real, observed flake
+// this function's own documentation directly describes.
+extern "C" {
+    fn gtk_layer_try_force_commit(window: *mut gtk_sys::GtkWindow);
+}
+
+/// Forces a pending surface commit if GTK hasn't already scheduled one.
+/// Works around a real, observed gtk-layer-shell flake (see the
+/// `extern "C"` block above) rather than a hypothetical one. A no-op on a
+/// window that was never turned into a layer surface in the first place
+/// (the X11/GNOME fallback path) — calling the underlying C function on a
+/// non-layer window is undefined behavior, so this checks first.
+pub fn force_commit(window: &gtk::ApplicationWindow) {
+    use gtk::glib::translate::ToGlibPtr;
+    let window: &gtk::Window = window.as_ref();
+    if !window.is_layer_window() {
+        return;
+    }
+    unsafe {
+        gtk_layer_try_force_commit(window.to_glib_none().0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

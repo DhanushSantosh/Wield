@@ -10,7 +10,6 @@ pub mod instance;
 mod layer_shell;
 mod logging;
 pub mod palette;
-pub mod preferences;
 pub mod state;
 pub mod tray;
 
@@ -154,33 +153,40 @@ pub fn run() {
             commands::show_palette,
             commands::hide_palette,
             commands::hotkey_status,
+            commands::configure_hotkey,
+            commands::resize_palette,
             commands::quit
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
 
             if layer_shell::is_available() {
-                let gtk_windows = [palette::LABEL, preferences::LABEL]
-                    .into_iter()
-                    .map(|label| {
-                        app.get_webview_window(label)
-                            .ok_or_else(|| format!("window {label:?} is missing"))?
-                            .gtk_window()
-                            .map_err(|error| {
-                                format!("could not get GTK handle for window {label:?}: {error}")
-                            })
-                    })
-                    .collect::<Result<Vec<_>, String>>();
+                let gtk_window = app
+                    .get_webview_window(palette::LABEL)
+                    .ok_or_else(|| format!("window {:?} is missing", palette::LABEL))
+                    .and_then(|window| {
+                        window.gtk_window().map_err(|error| {
+                            format!(
+                                "could not get GTK handle for window {:?}: {error}",
+                                palette::LABEL
+                            )
+                        })
+                    });
 
-                match gtk_windows {
-                    Ok(windows) => {
-                        for window in &windows {
-                            layer_shell::configure(window);
-                        }
+                match gtk_window {
+                    Ok(window) => {
+                        // A distinct namespace, not the library default - see
+                        // layer_shell::configure's own doc comment for why.
+                        let namespace = format!("wield-{}", palette::LABEL);
+                        layer_shell::configure(
+                            &window,
+                            Some(layer_shell::PALETTE_TOP_MARGIN_PX),
+                            &namespace,
+                        );
                         tracing::info!("layer-shell positioning enabled");
                     }
                     Err(error) => {
-                        tracing::warn!(%error, "layer-shell setup skipped for all windows");
+                        tracing::warn!(%error, "layer-shell setup skipped");
                     }
                 }
             } else {
@@ -191,19 +197,17 @@ pub fn run() {
             // palette immediately, so layer-shell setup must happen first.
             setup_shell.bind(handle.clone());
 
-            // Closing either window hides it instead of destroying it — the
-            // palette must stay warm, and Preferences has no reason to be
-            // recreated either.
-            for label in [palette::LABEL, preferences::LABEL] {
-                if let Some(window) = app.get_webview_window(label) {
-                    let window_clone = window.clone();
-                    window.on_window_event(move |event| {
-                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                            api.prevent_close();
-                            let _ = window_clone.hide();
-                        }
-                    });
-                }
+            // Closing the window hides it instead of destroying it - it must
+            // stay warm (Settings lives inside it as a view, not a second
+            // window, so there's only ever this one to keep warm now).
+            if let Some(window) = app.get_webview_window(palette::LABEL) {
+                let window_clone = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = window_clone.hide();
+                    }
+                });
             }
 
             // Tray icon + menu, built from the current tool list. Logs (does
@@ -220,10 +224,11 @@ pub fn run() {
             let hotkey_app = handle.clone();
             tauri::async_runtime::spawn(async move {
                 let show_app = hotkey_app.clone();
-                let outcome = wield_portal::global_shortcuts::bind_show_palette(move || {
-                    palette::show(&show_app);
-                })
-                .await;
+                let (outcome, controller) =
+                    wield_portal::global_shortcuts::bind_show_palette(move || {
+                        palette::show(&show_app);
+                    })
+                    .await;
                 let hotkey_state = match outcome {
                     wield_portal::global_shortcuts::BindOutcome::Bound => {
                         state::HotkeyState::Registered
@@ -232,9 +237,9 @@ pub fn run() {
                         fallback_command,
                     } => state::HotkeyState::Unavailable { fallback_command },
                 };
-                hotkey_app
-                    .state::<state::AppState>()
-                    .set_hotkey_state(hotkey_state);
+                let app_state = hotkey_app.state::<state::AppState>();
+                app_state.set_hotkey_state(hotkey_state);
+                app_state.set_hotkey_controller(controller);
             });
 
             tracing::info!("wield shell ready (headless)");

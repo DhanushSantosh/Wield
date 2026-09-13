@@ -102,7 +102,14 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
         return;
     }
     match id {
-        "preferences" => crate::preferences::show(app),
+        // Settings is a view inside the palette window, not a separate
+        // window (see App.tsx / SettingsView) - so "opening" it from the
+        // tray means showing the palette and telling it to switch view,
+        // the same two-step shape as selecting a tool above.
+        "preferences" => {
+            let _ = app.emit("tray://open-settings", ());
+            crate::palette::show(app);
+        }
         "quit" => app.exit(0),
         other => tracing::warn!(menu_id = other, "unhandled tray menu item"),
     }

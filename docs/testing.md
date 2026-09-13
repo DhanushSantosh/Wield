@@ -198,3 +198,319 @@ claimed as live keystroke-verified here. Resize-while-centered was not tested:
 the dynamic-resize feature remains on an unmerged sibling branch and this work
 was explicitly based on `master`. KDE/KWin, Sway, other wlroots compositors,
 GNOME's unsupported-protocol fallback, and X11 were not tested in this pass.
+
+### `OnDemand` doesn't work on this Hyprland version; `Exclusive` has a real tradeoff
+
+On 2026-09-13, real usage on the owner's desktop surfaced two problems the
+initial verification above didn't catch (it never actually pressed a key or
+clicked away): with `KeyboardMode::OnDemand`, neither Escape-to-hide nor
+click-away-to-hide worked — the palette could only be closed by quitting the
+whole app from the tray.
+
+Investigated with `wtype`/`ydotool` (synthetic Wayland input — far more
+reliable than manual clicking for isolating this) rather than more manual
+testing:
+
+- `OnDemand`: a synthetic `Escape` did nothing. Clicking directly inside the
+  window first, then sending `Escape`, still did nothing. `hyprctl
+  activewindow` confirmed the palette never became the focused window at
+  all after `ShowPalette`. This matches a long-standing upstream report that
+  Hyprland's `ON_DEMAND` handling doesn't behave as the protocol describes
+  (<https://github.com/hyprwm/Hyprland/issues/2264>) — on this compositor
+  version (0.56.2), it appears to just never grant focus, click or no click.
+- `Exclusive`: confirmed Escape-to-hide now works reliably. But `hyprctl
+  activewindow` stayed on the previously-active app even while the palette
+  was shown and mapped, and a real click on another window while the
+  palette was open did not register at all (the owner directly observed
+  this: "i couldnt register a click at all couldnt even click the main
+  foreground window"). This is effectively modal behavior for as long as
+  the palette is mapped, not merely "guaranteed keyboard focus" as the
+  protocol's naming might suggest.
+
+**Decision (owner, 2026-09-13):** ship `Exclusive` and document the tradeoff,
+rather than keep chasing a fully clean fix. Escape (or the tray) are the
+supported ways to dismiss the palette; click-away-to-dismiss does not work
+while it's shown. Revisit if Hyprland's `on_demand` handling improves, or if
+a different mechanism — Wield detecting an outside click itself rather than
+relying on the compositor's normal focus handoff — turns out to be worth the
+added complexity.
+
+### The palette intermittently failed to render at all — root-caused and fixed
+
+Also on 2026-09-13, real usage surfaced something more severe than the
+keyboard-focus tradeoff above: the palette sometimes didn't visually appear
+at all after `ShowPalette` — `hyprctl layers` still reported it mapped at
+the correct, centered geometry, but nothing was actually painted, letting
+whatever was underneath show through untouched.
+
+Confirmed with `grim` (a native Wayland screenshot tool — far more reliable
+for this than manual observation or the general-purpose screenshot tooling
+used earlier in this project's history): captured the exact screen region
+the palette should occupy and got a picture of a completely unrelated
+window instead. Initially suspected this was specific to the (at-the-time
+untested) combination of the dynamic-resize feature with layer-shell — a
+`set_size()` call not participating correctly in a layer-shell surface's
+own configure/commit handshake. That turned out to be a real, separate bug
+(fixed regardless — see the `palette::animate_to_height` commit — Tauri's
+generic `set_size()` doesn't work correctly on a layer-shell surface;
+gtk-layer-shell's own docs specify `set_size_request()` + `resize(1, 1)`
+instead), but re-testing the *simplest possible* build (layer-shell only,
+no resize code at all, identical binary re-launched fresh) still failed
+non-deterministically — proving it wasn't resize-specific at all, just a
+general layer-shell rendering flake.
+
+This matches a real, documented gtk-layer-shell C-library function:
+`gtk_layer_try_force_commit()`, whose own doc comment describes exactly
+this scenario — "the surface is in a state where it does not receive frame
+callbacks and the regular deferred commit mechanism is unavailable." That
+function isn't exposed by either the safe `gtk-layer-shell` crate (0.8.2)
+or its `-sys` bindings (0.7.2) — added to the C library after these
+(already-unmaintained) Rust bindings were last updated. Declared it by
+hand as a minimal `extern "C"` binding (`apps/wield/src-tauri/src/layer_shell.rs`,
+`force_commit`) and call it right after `window.show()` in
+`palette::show()`.
+
+**Verified**: 5 consecutive fresh launches (new process, `ShowPalette`,
+`grim` screenshot, every time) all rendered correctly after this fix, versus
+frequent failures before it. Not an absolute guarantee — the underlying
+flake's exact trigger condition was never fully understood, only worked
+around via the mechanism the C library's own author built for exactly this
+situation — but a meaningful, real, repeatably-verified improvement, not
+a guess.
+
+A second real bug was caught and fixed in the process of building this: the
+first version of the `force_commit` call touched a raw GTK object directly
+from `palette::show()` without dispatching through
+`WebviewWindow::run_on_main_thread()` first. Since `show()` is invoked from
+the D-Bus `ShowPalette` handler (not guaranteed to already be on the GTK
+main thread) and raw GTK objects are not thread-safe, this caused the
+`ShowPalette` D-Bus call to hang outright (`busctl` reported "Connection
+timed out"). Fixed by wrapping the same way the resize code already
+correctly does.
+
+### A second, distinct non-rendering bug — deterministic this time, and unrelated to `force_commit`
+
+Still on 2026-09-13, combining the `force_commit` fix above with the
+dynamic-resize feature (`feat/dynamic-palette-resize`) for a joint test
+turned up a second, worse bug: the palette failed to render on **every**
+fresh launch (not intermittently) once resize was in the build, even with
+`force_commit` in place.
+
+Found a much faster and more precise signal than screenshots for this:
+`hyprctl layers -j` reports an `alpha` field per layer surface. A working
+palette reports `alpha: 1`; this one reported `alpha: 0` — and stayed at
+`0` indefinitely (polled every 100ms for 2 seconds) rather than animating
+through and settling on `1`, i.e. genuinely stuck, not mid-transition.
+
+Root-caused by elimination, in order:
+
+1. Suspected the resize animation itself (twelve rapid
+   `set_size_request()` + `resize(1, 1)` calls in 180ms right after
+   `show()`) was overwhelming the single `force_commit()` call. Added a
+   second `force_commit()` after every resize step. **No change** —
+   `alpha` still stuck at 0, 5/5 fresh launches.
+2. Disabled the resize animation entirely (temporarily made
+   `animate_to_height` a no-op) to isolate whether resize was involved at
+   all. **Still no change** — `alpha` still stuck at 0, 5/5 fresh
+   launches, with *no* resize code running whatsoever. This ruled out
+   resize, and by extension `force_commit`, completely.
+3. Re-tested the isolated `fix/layer-shell-keyboard-focus` branch (the one
+   the original 5/5 `force_commit` verification above was done on) fresh,
+   using this same `alpha` check instead of eyeballing screenshots: a
+   clean 5/5 at `alpha: 1`. So something genuinely differed between that
+   branch and the combined one — not a re-run of the same flake.
+4. Diffed the two branches. One line stood out immediately in
+   `apps/wield/src-tauri/tauri.conf.json`: the combined branch had flipped
+   the palette window's `"resizable"` from `false` to `true` (presumably
+   while building the resize feature, on the assumption a
+   programmatically-resized window needs to be marked resizable — it
+   doesn't; `gtk_window_resize()` works regardless). Flipped it back to
+   `false` with everything else (resize code included, `force_commit`
+   included) left untouched, rebuilt, and re-ran the stress test: **10/10
+   fresh launches at `alpha: 1`**, correct final geometry
+   (`720×216`, re-centered correctly), and a visual `grim` screenshot
+   confirming the palette actually on screen.
+
+So `resizable: true` on a `gtk-layer-shell` surface reliably breaks
+rendering outright on this Hyprland version — a separate, deterministic
+bug, not a rarer version of the `force_commit` flake, and not fixed by
+`force_commit` at all. The per-step `force_commit` addition from step 1
+above was reverted (`git stash drop`) once the real cause was found — it
+wasn't wrong to try, but it wasn't the fix, and keeping unnecessary
+workarounds around makes the next investigation harder, not easier.
+
+**Lesson**: `hyprctl layers`' `alpha` field is a much more precise
+diagnostic for "is this surface actually rendering" than a screenshot —
+it's instant, scriptable, and distinguishes "still animating" from
+"genuinely stuck" in a way a single screenshot can't. Prefer it over
+`grim` for this specific class of bug going forward; keep `grim` for
+confirming what's *visually* on screen once `alpha` says it should be.
+
+### The palette rendered see-through — a user's own compositor config, not our code
+
+On 2026-09-13, after the positioning/sizing fixes above, live feedback
+("I don't see any difference, I just want the empty spaces on the sides
+gone") didn't match what the code changes should have produced. A `grim`
+crop of the actual rendered palette (not just a full-desktop screenshot,
+which made this easy to miss) showed why: the card was rendering as a
+near-fully-blurred, see-through ghost of itself — another app's media
+player, album art included, was clearly visible *through* the palette's
+supposedly solid `var(--bg)` background.
+
+Root cause: `gtk-layer-shell` defaults every window to the literal
+namespace `"gtk-layer-shell"` unless the app sets its own, and this dev
+machine's Hyprland config (`~/.config/hypr/hyprland/rules.lua`, part of
+the dots-hyprland/"illogical impulse" rice) has:
+
+```lua
+hl.layer_rule({ match = { namespace = "gtk-layer-shell" }, blur = true})
+hl.layer_rule({ match = { namespace = "gtk-layer-shell" }, ignore_alpha = 0})
+```
+
+— rules clearly written for *some other* simple gtk-layer-shell-based
+utility that wants full blur passthrough, not a considered choice about
+Wield. Every app that never bothers to set its own namespace collides
+with whatever a user's compositor config assumes about "generic
+gtk-layer-shell apps."
+
+Fixed by calling `set_namespace()` (present in the `LayerShell` trait,
+previously unused) with a distinct name per window — `wield-palette`,
+`wield-preferences` — in `layer_shell::configure()`. Confirmed via a
+tight `grim` crop immediately after `ShowPalette`: solid, fully opaque
+card, no ghosting, before touching anything compositor-side.
+
+**Lesson**: a full-desktop screenshot can look "close enough" at a
+glance and hide a real rendering bug; always crop tightly to the actual
+surface being tested. And: never leave a layer-shell surface on the
+library's default namespace in a real app — a user's own compositor
+rules can already be targeting it for reasons that have nothing to do
+with your app.
+
+### Removing the card's side margin broke its rounded corners
+
+Once the ghosting above was fixed, live feedback made clear the ~40px
+per-side gap between the card and the window (`.app-shell`'s
+`max-width` vs. the window's own width) read as dead space, not
+intentional framing. Removing it entirely (card = window width) fixed
+that, but broke the corners: `border-radius: 15px` on `.app-shell`
+started rendering as a hard 90° corner instead of a curve, confirmed
+with a `grim` crop zoomed into just one corner.
+
+The window was never given Tauri's `"transparent": true` config flag.
+Best-guess mechanism (not independently confirmed in the compositor's
+own source, but consistent with every observation): GTK/Wayland
+toolkits track an "opaque region" per surface as a rendering
+optimization - the area a compositor can skip alpha-blending entirely.
+With the card smaller than the window, part of the surface was never
+painted with any opaque color at all, so the toolkit correctly inferred
+a non-opaque region and blended it properly (rounded corners included).
+Once the card's own solid background covered 100% of the window, the
+toolkit likely inferred the *entire* surface as opaque, and the
+rounded corner's own transparent cutout - which depends on real
+per-pixel alpha blending - got clamped to opaque too.
+
+Adding `"transparent": true` restored a curve, but a badly-aliased one:
+zoomed in, the cutout area was a blocky, dithered blue-gray, not the
+smooth flat blue confirmed to actually be there (hid the palette,
+screenshotted the same exact pixels, compared directly). Something
+about compositing real per-pixel alpha at the *exact* window edge, with
+zero margin, produces poor-quality output even when it technically
+isn't opaque anymore.
+
+Landed a middle ground instead of chasing pixel-perfect edge-of-surface
+alpha further: `max-width: calc(100% - 40px)` - a 20px margin per side,
+just past the 15px corner radius so the curve has room to fully form.
+Confirmed clean (smooth curve, no artifact, matching the quality of the
+very first working screenshots) via the same hide-and-compare method.
+20px reads as "this has rounded corners" rather than "there's empty
+space here" - a real, load-bearing distinction that cost several rounds
+of live feedback to actually pin down precisely.
+
+**Lesson**: "no margin" and "a small margin" are not points on the same
+continuum as far as rendering quality goes on this stack - zero margin
+hit a real, qualitatively different code path (whole-surface-opaque
+inference) than even a small nonzero one. When chasing a "make the gap
+smaller" request, verify the *smallest* gap that still works before
+assuming zero is just the limit of the same trend.
+
+### The Preferences window had no way to close itself — merged into the palette instead
+
+Also on 2026-09-13: opening Preferences (tray → "Preferences") left a
+window on screen with no way to dismiss it. `KeyboardMode::Exclusive`
+(the same tradeoff already accepted and documented for the palette)
+meant clicking anywhere else did nothing, and unlike the palette,
+Preferences had no Escape handler and no close button at all — nothing
+in its own code path ever called `preferences::hide()`. The only way
+out was killing the whole process.
+
+Rather than give the Preferences window its own copy of every fix
+already made for the palette (Escape handling, a close affordance,
+`resizable: false` for the exact same alpha-stuck-at-0 flake docs above
+already root-caused, and - discovered while fixing that - a *second*,
+new bug where an unanchored non-resizable layer-shell window with no
+active height constraint grew to the full monitor height instead of the
+requested 480px), Preferences was folded into the palette's own view
+state machine instead (`App.tsx`'s `View` union gained a `"settings"`
+member, rendering `SettingsView`). It inherits the palette's already-
+solid show/hide/resize/keyboard/layer-shell handling for free - there
+is only ever one window to keep correct now, not two.
+
+A gear icon in the search bar's input row opens it; an X button and
+Escape both return to search, exactly like the existing `"form"` view.
+The tray's "Preferences" item now emits a `tray://open-settings` event
+and shows the palette, mirroring the existing tool-selection path,
+instead of showing a second window that no longer exists.
+
+The Settings content (Hotkey / Palette behaviour / System status) is
+tall enough - the portal-support table alone lists twenty-plus rows -
+that it needs its own scroll region (`max-height` + `overflow-y: auto`
+on `.settings-view__body`) rather than letting the palette's own
+`animate_to_height` grow to fit all of it; MAX_HEIGHT there is 640px,
+well short of the full list.
+
+**Lesson**: a second window means a second copy of every fix already
+made for the first one, indefinitely - a real reason to prefer folding
+a secondary UI into an already-hardened surface over giving it its own
+window, when the UI doesn't specifically need one.
+
+### CI failed on the `force_commit` fix: a hard link-time dependency the dev machine couldn't have caught
+
+Opening PR #10, CI failed both jobs with `undefined symbol:
+gtk_layer_try_force_commit` at the link step - `wield-app` itself
+wouldn't link. The dev machine's local build was, and had always been,
+completely unaffected.
+
+Cause: `force_commit`'s `extern "C" { fn gtk_layer_try_force_commit(...); }`
+block (see above) makes the symbol a *hard link-time requirement* -
+the linker fails outright if it's not in whatever `libgtk-layer-shell`
+the build machine has installed. The dev machine has 0.10.1, new enough
+to export it. GitHub's `ubuntu-latest` runners install an older
+`libgtk-layer-shell-dev` via `apt` (added for CI in PR #9's own fix,
+before this function existed) that doesn't. This was never a CI
+environment gap to patch (there's no newer package to install to) - the
+symbol may just not exist on a given system, exactly as the function's
+own doc comment already says.
+
+Fixed by resolving the symbol at runtime instead of at link time:
+`libloading::os::unix::Library::this()` (a handle to the current
+process's own already-loaded symbol table - gtk-layer-shell is already
+linked in via `gtk-layer-shell-sys`, just not necessarily *this*
+symbol) plus `.get::<fn(...)>(b"gtk_layer_try_force_commit\0")`. Missing
+now means `None`, handled identically to the existing "not a layer
+window" no-op case - not a build failure, on *any* system, not only CI.
+`libloading` pinned to 0.7 in `Cargo.toml` to match the version already
+resolved transitively (via `tray-icon`'s own `dlopen2` dependency)
+rather than compiling a second copy.
+
+Confirmed after the fix: `cargo build --release` links clean, and a
+fresh 3/3 launch-and-check-alpha spot-check on the dev machine still
+shows the workaround actually firing (`alpha: 1` every time) - the
+runtime lookup finds and calls the same symbol just as reliably as the
+hard-linked version did there.
+
+**Lesson**: a workaround built against "the C header documents this
+function" is still only as portable as the *library version* that
+exports it. A local build succeeding proves nothing about a symbol's
+portability - only CI (or another machine) surfaces that gap. Prefer a
+runtime lookup over `extern "C"` for any symbol whose presence isn't
+guaranteed by the crate's own declared version.

@@ -1,4 +1,5 @@
 import type { ToolSummary } from "../lib/wield";
+import { SettingsIcon } from "./SettingsIcon";
 import { ToolRow } from "./ToolRow";
 import "./SearchView.css";
 
@@ -10,6 +11,7 @@ export interface SearchViewProps {
   selectedIndex: number;
   onSelectIndex: (index: number) => void;
   onActivate: (tool: ToolSummary) => void;
+  onOpenSettings: () => void;
 }
 
 export function SearchView({
@@ -20,6 +22,7 @@ export function SearchView({
   selectedIndex,
   onSelectIndex,
   onActivate,
+  onOpenSettings,
 }: SearchViewProps) {
   return (
     <section className="search-view" aria-label="Tool search">
@@ -36,6 +39,14 @@ export function SearchView({
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
         />
+        <button
+          type="button"
+          className="search-view__settings"
+          aria-label="Open settings"
+          onClick={onOpenSettings}
+        >
+          <SettingsIcon />
+        </button>
       </div>
       <div className="search-view__divider" />
       {showingRecents ? <div className="section-label">Recent</div> : null}

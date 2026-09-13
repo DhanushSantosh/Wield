@@ -7,7 +7,11 @@ const listToolsMock = vi.fn();
 const runToolMock = vi.fn();
 const cancelRunMock = vi.fn();
 const hidePaletteMock = vi.fn();
+const resizePaletteMock = vi.fn();
+const hotkeyStatusMock = vi.fn();
+const capabilitiesMock = vi.fn();
 let selectToolHandler: ((toolId: string) => void) | undefined;
+let openSettingsHandler: (() => void) | undefined;
 
 vi.mock("./lib/wield", async (importOriginal) => {
   const original = await importOriginal<typeof import("./lib/wield")>();
@@ -17,10 +21,19 @@ vi.mock("./lib/wield", async (importOriginal) => {
     runTool: (...args: unknown[]) => runToolMock(...args),
     cancelRun: (...args: unknown[]) => cancelRunMock(...args),
     hidePalette: (...args: unknown[]) => hidePaletteMock(...args),
+    resizePalette: (...args: unknown[]) => resizePaletteMock(...args),
+    hotkeyStatus: () => hotkeyStatusMock(),
+    capabilities: () => capabilitiesMock(),
     onSelectTool: async (handler: (toolId: string) => void) => {
       selectToolHandler = handler;
       return () => {
         selectToolHandler = undefined;
+      };
+    },
+    onOpenSettings: async (handler: () => void) => {
+      openSettingsHandler = handler;
+      return () => {
+        openSettingsHandler = undefined;
       };
     },
   };
@@ -89,11 +102,29 @@ beforeAll(() => {
   Object.defineProperty(window, "localStorage", { configurable: true, value: storage });
 });
 
+let resizeObserverCallback: ResizeObserverCallback | undefined;
+
+class FakeResizeObserver implements ResizeObserver {
+  constructor(callback: ResizeObserverCallback) {
+    resizeObserverCallback = callback;
+  }
+  observe() {}
+  unobserve() {}
+  disconnect() {
+    resizeObserverCallback = undefined;
+  }
+}
+
 beforeEach(() => {
   listToolsMock.mockReset().mockResolvedValue([colorTool, convertTool]);
   runToolMock.mockReset();
   cancelRunMock.mockReset().mockResolvedValue(true);
   hidePaletteMock.mockReset().mockResolvedValue(undefined);
+  resizePaletteMock.mockReset().mockResolvedValue(undefined);
+  hotkeyStatusMock.mockReset().mockResolvedValue({ state: "Registered" });
+  capabilitiesMock.mockReset().mockResolvedValue({ binaries: {}, portals: {}, tools: [] });
+  resizeObserverCallback = undefined;
+  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   window.localStorage.clear();
 });
 
@@ -111,7 +142,11 @@ test("typing a query renders the backend-ranked results in order", async () => {
   render(<App />);
   await userEvent.type(screen.getByRole("searchbox", { name: "Search tools" }), "image");
   await waitFor(() => expect(listToolsMock).toHaveBeenLastCalledWith("image"));
-  const rows = screen.getAllByRole("button");
+  // Excludes the settings gear button, also a role="button" in this same
+  // input row but not one of the ranked result rows under test here.
+  const rows = screen
+    .getAllByRole("button")
+    .filter((row) => row.getAttribute("aria-label") !== "Open settings");
   expect(rows.map((row) => row.textContent)).toEqual([
     "Convert imageConvert",
     "Pick a colorCapture",
@@ -285,4 +320,37 @@ test("a tray tool-selection event for an unavailable tool does nothing", async (
   await act(async () => selectToolHandler?.("image.convert"));
   expect(runToolMock).not.toHaveBeenCalled();
   expect(screen.getByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
+});
+
+test("reports the shell's rendered height to resizePalette whenever it changes", async () => {
+  render(<App />);
+  await screen.findByText("Pick a color");
+  expect(resizeObserverCallback).toBeDefined();
+
+  const fakeEntry = { contentRect: { height: 246 } } as ResizeObserverEntry;
+  act(() => resizeObserverCallback?.([fakeEntry], {} as ResizeObserver));
+  expect(resizePaletteMock).toHaveBeenCalledWith(246);
+});
+
+test("the settings gear opens settings, and its close button returns to search", async () => {
+  render(<App />);
+  await userEvent.click(await screen.findByRole("button", { name: "Open settings" }));
+  expect(await screen.findByText(/Super\+W/)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Close settings" }));
+  expect(await screen.findByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
+});
+
+test("Escape closes settings back to search", async () => {
+  render(<App />);
+  await userEvent.click(await screen.findByRole("button", { name: "Open settings" }));
+  await screen.findByText(/Super\+W/);
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(await screen.findByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
+});
+
+test("a tray open-settings event opens settings the same way the gear does", async () => {
+  render(<App />);
+  await screen.findByText("Pick a color");
+  await act(async () => openSettingsHandler?.());
+  expect(await screen.findByText(/Super\+W/)).toBeInTheDocument();
 });

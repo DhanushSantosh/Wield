@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { bumpRecent, getRecentIds } from "./lib/recents";
 import { getBlurToHide } from "./lib/settings";
 import {
   cancelRun,
+  capabilities,
   createRunId,
   hidePalette,
+  hotkeyStatus,
   listTools,
+  onOpenSettings,
   onSelectTool,
+  resizePalette,
   runTool,
+  type CapabilitiesReport,
+  type HotkeyState,
   type Progress,
   type RunId,
   type ToolOutcome,
@@ -17,12 +23,14 @@ import { ArgForm } from "./palette/ArgForm";
 import { ResultView } from "./palette/ResultView";
 import { RunningView } from "./palette/RunningView";
 import { SearchView } from "./palette/SearchView";
+import { SettingsView } from "./palette/SettingsView";
 import { useKeyboardNav } from "./useKeyboardNav";
 
 type CompletedOutcome = Exclude<ToolOutcome, "Cancelled">;
 
 type View =
   | { kind: "search" }
+  | { kind: "settings" }
   | { kind: "form"; tool: ToolSummary; values: Record<string, unknown>; viaRunAgain: boolean }
   | {
       kind: "running";
@@ -53,6 +61,7 @@ type Action =
   | { type: "SET_TOOLS"; tools: ToolSummary[]; showingRecents: boolean }
   | { type: "SELECT_INDEX"; index: number }
   | { type: "OPEN_FORM"; tool: ToolSummary }
+  | { type: "OPEN_SETTINGS" }
   | {
       type: "RUN";
       tool: ToolSummary;
@@ -89,6 +98,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, selectedIndex: action.index };
     case "OPEN_FORM":
       return { ...state, view: { kind: "form", tool: action.tool, values: {}, viaRunAgain: false } };
+    case "OPEN_SETTINGS":
+      return { ...state, view: { kind: "settings" } };
     case "RUN":
       return {
         ...state,
@@ -118,7 +129,9 @@ function reducer(state: State, action: Action): State {
         },
       };
     case "ESCAPE":
-      if (state.view.kind === "form") return { ...state, view: { kind: "search" } };
+      if (state.view.kind === "form" || state.view.kind === "settings") {
+        return { ...state, view: { kind: "search" } };
+      }
       if (state.view.kind === "result") {
         return state.view.viaRunAgain
           ? {
@@ -154,6 +167,7 @@ interface SearchControllerProps {
   onSelectIndex: (index: number) => void;
   onActivate: (tool: ToolSummary) => void;
   onTopLevelEscape: () => void;
+  onOpenSettings: () => void;
 }
 
 function SearchController({
@@ -162,6 +176,7 @@ function SearchController({
   onSelectIndex,
   onActivate,
   onTopLevelEscape,
+  onOpenSettings,
 }: SearchControllerProps) {
   const selected = state.tools[state.selectedIndex];
   useKeyboardNav({
@@ -179,6 +194,7 @@ function SearchController({
       onQueryChange={onQueryChange}
       tools={state.tools}
       showingRecents={state.showingRecents}
+      onOpenSettings={onOpenSettings}
       selectedIndex={state.selectedIndex}
       onSelectIndex={onSelectIndex}
       onActivate={onActivate}
@@ -199,6 +215,35 @@ function recentTools(tools: ToolSummary[]): ToolSummary[] {
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const attemptRef = useRef(0);
+  const shellRef = useRef<HTMLElement>(null);
+  const [hotkey, setHotkey] = useState<HotkeyState | null>(null);
+  const [report, setReport] = useState<CapabilitiesReport | null>(null);
+
+  // Fetched once up front (not lazily when settings opens) so the view has
+  // its data ready the instant it's shown, matching how tool results are
+  // never blocked on a fresh network round trip either.
+  useEffect(() => {
+    void hotkeyStatus().then(setHotkey);
+  }, []);
+
+  useEffect(() => {
+    void capabilities().then(setReport);
+  }, []);
+
+  // Width is fixed; height follows the shell's actual rendered content —
+  // search results, an arg form, progress, or a result card each have a
+  // different natural height, so the window shouldn't be one rigid box
+  // regardless of what's showing.
+  useEffect(() => {
+    const element = shellRef.current;
+    if (element === null) return;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height;
+      if (height !== undefined) void resizePalette(height);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const query = state.query.trim();
@@ -295,7 +340,21 @@ export default function App() {
   }, [activate]);
 
   useEffect(() => {
-    if (state.view.kind !== "running" && state.view.kind !== "result") return;
+    let unsubscribe: (() => void) | undefined;
+    void onOpenSettings(() => dispatch({ type: "OPEN_SETTINGS" })).then((fn) => {
+      unsubscribe = fn;
+    });
+    return () => unsubscribe?.();
+  }, []);
+
+  useEffect(() => {
+    if (
+      state.view.kind !== "running" &&
+      state.view.kind !== "result" &&
+      state.view.kind !== "settings"
+    ) {
+      return;
+    }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
@@ -321,7 +380,12 @@ export default function App() {
           if (state.query === "") void hidePalette();
           else dispatch({ type: "SET_QUERY", query: "" });
         }}
+        onOpenSettings={() => dispatch({ type: "OPEN_SETTINGS" })}
       />
+    );
+  } else if (state.view.kind === "settings") {
+    content = (
+      <SettingsView hotkey={hotkey} report={report} onClose={() => dispatch({ type: "ESCAPE" })} />
     );
   } else if (state.view.kind === "form") {
     const { tool, values, viaRunAgain } = state.view;
@@ -346,5 +410,9 @@ export default function App() {
     );
   }
 
-  return <main className="app-shell">{content}</main>;
+  return (
+    <main ref={shellRef} className="app-shell">
+      {content}
+    </main>
+  );
 }

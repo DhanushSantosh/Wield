@@ -99,6 +99,11 @@ export async function hidePalette(): Promise<void> {
   return invoke<void>("hide_palette");
 }
 
+/** Smoothly resizes the palette window's height to `height` (logical pixels). */
+export async function resizePalette(height: number): Promise<void> {
+  return invoke<void>("resize_palette", { height });
+}
+
 // HotkeyState is internally tagged (#[serde(tag = "state")]) on the Rust
 // side — unlike every other enum here, which is externally tagged.
 export type HotkeyState =
@@ -123,6 +128,15 @@ export async function hotkeyStatus(): Promise<HotkeyState> {
   return invoke<HotkeyState>("hotkey_status");
 }
 
+/**
+ * Opens the desktop environment's own shortcut-rebinding UI. Rejects when
+ * there's no active portal session to reconfigure (the bind never
+ * succeeded, hasn't resolved yet, or the backend doesn't support it).
+ */
+export async function configureHotkey(): Promise<void> {
+  return invoke<void>("configure_hotkey");
+}
+
 export async function capabilities(): Promise<CapabilitiesReport> {
   return invoke<CapabilitiesReport>("capabilities");
 }
@@ -131,4 +145,15 @@ export async function capabilities(): Promise<CapabilitiesReport> {
 export async function onSelectTool(handler: (toolId: string) => void): Promise<() => void> {
   const { listen } = await import("@tauri-apps/api/event");
   return listen<string>("tray://select-tool", (event) => handler(event.payload));
+}
+
+/**
+ * Subscribes to the tray's "Preferences" selection. Settings lives inside
+ * the palette window as its own view (see App.tsx) rather than a separate
+ * window, so opening it from the tray needs an event the same way
+ * tool-selection does, not a second window to show.
+ */
+export async function onOpenSettings(handler: () => void): Promise<() => void> {
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen<void>("tray://open-settings", () => handler());
 }

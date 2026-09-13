@@ -1,0 +1,44 @@
+.settings-view {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-view__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 18px 8px;
+}
+
+.settings-view__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settings-view__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.settings-view__close:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* Capped and scrollable rather than left to grow unbounded - the system
+   status section alone can list twenty-plus portals, far more than fits
+   in the palette's own MAX_HEIGHT (see palette.rs). */
+.settings-view__body {
+  max-height: 460px;
+  overflow-y: auto;
+  padding: 0 18px 18px;
+}

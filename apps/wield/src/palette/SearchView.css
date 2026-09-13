@@ -2,7 +2,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 18px 20px 16px;
+  padding: 18px 18px 16px;
 }
 
 .search-view__prompt {
@@ -23,13 +23,37 @@
   color: var(--text-muted);
 }
 
+.search-view__settings {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.search-view__settings:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.settings-icon {
+  width: 16px;
+  height: 16px;
+}
+
 .search-view__divider {
   height: 1px;
   background: var(--border);
 }
 
 .section-label {
-  padding: 14px 20px 6px;
+  padding: 14px 18px 6px;
   color: var(--text-faint);
   font-size: 11px;
 }

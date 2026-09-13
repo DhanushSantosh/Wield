@@ -31,7 +31,13 @@ async-trait.workspace = true
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 gtk = "0.18"
+gtk-sys = "0.18"
 gtk-layer-shell = { version = "0.8", features = ["v0_6"] }
+# Pinned to the version already resolved transitively (via tray-icon's own
+# dlopen2 dependency) so this doesn't pull in a second copy - see
+# layer_shell::force_commit for why this is a runtime lookup rather than an
+# `extern "C"` link-time one.
+libloading = "0.7"
 
 [dev-dependencies]
 tauri = { version = "2.9.5", features = ["test", "tray-icon"] }

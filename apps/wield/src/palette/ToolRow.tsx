@@ -1,4 +1,5 @@
 import type { ToolSummary } from "../lib/wield";
+import { CategoryIcon } from "./CategoryIcon";
 import "./ToolRow.css";
 
 export interface ToolRowProps {
@@ -26,7 +27,9 @@ export function ToolRow({ tool, selected, onSelect, onActivate }: ToolRowProps) 
       onFocus={onSelect}
       onMouseEnter={onSelect}
     >
-      <span className="tool-row__icon" aria-hidden="true" />
+      <span className="tool-row__icon" aria-hidden="true">
+        <CategoryIcon category={tool.category} />
+      </span>
       <span className="tool-row__title">{tool.title}</span>
       <span className="tool-row__meta">{tool.available ? tool.category : tool.reason}</span>
     </button>

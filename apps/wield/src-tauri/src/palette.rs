@@ -3,7 +3,8 @@
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use tauri::{AppHandle, LogicalSize, Manager, Size, WebviewWindow};
+use gtk::prelude::{GtkWindowExt, WidgetExt};
+use tauri::{AppHandle, Manager, WebviewWindow};
 
 pub const LABEL: &str = "palette";
 
@@ -118,8 +119,34 @@ pub fn animate_to_height(app: &AppHandle, target_height: f64) {
                 tracing::info!("resize superseded by a newer request");
                 return;
             }
-            if let Err(error) = window.set_size(Size::Logical(LogicalSize { width, height })) {
-                tracing::warn!(%error, "failed to resize palette");
+            let target_width = width.round() as i32;
+            let target_height_px = height.round() as i32;
+            let for_main_thread = window.clone();
+            let dispatch = window.run_on_main_thread(move || {
+                // Deliberately not Tauri's generic WebviewWindow::set_size():
+                // on a gtk-layer-shell surface that call doesn't correctly
+                // participate in the surface's own configure/commit
+                // handshake, and the window silently stops rendering
+                // anything at all (confirmed live: hyprctl still reports it
+                // mapped at the right geometry, but the surface never
+                // commits a visible frame again). gtk-layer-shell's own
+                // docs give the fix: set the widget's size request, then
+                // resize to (1, 1) so GTK's normal natural-size negotiation
+                // takes over and actually commits a new frame. This is
+                // plain GTK API, not layer-shell-specific, so it's correct
+                // for the X11/no-layer-shell fallback window too.
+                match for_main_thread.gtk_window() {
+                    Ok(gtk_window) => {
+                        gtk_window.set_size_request(target_width, target_height_px);
+                        gtk_window.resize(1, 1);
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "could not get GTK handle during palette resize");
+                    }
+                }
+            });
+            if let Err(error) = dispatch {
+                tracing::warn!(%error, "failed to dispatch palette resize to the main thread");
                 return;
             }
             let is_last = index + 1 == RESIZE_STEPS as usize;

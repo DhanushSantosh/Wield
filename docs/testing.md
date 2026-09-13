@@ -345,3 +345,43 @@ it's instant, scriptable, and distinguishes "still animating" from
 "genuinely stuck" in a way a single screenshot can't. Prefer it over
 `grim` for this specific class of bug going forward; keep `grim` for
 confirming what's *visually* on screen once `alpha` says it should be.
+
+### The palette rendered see-through — a user's own compositor config, not our code
+
+On 2026-09-13, after the positioning/sizing fixes above, live feedback
+("I don't see any difference, I just want the empty spaces on the sides
+gone") didn't match what the code changes should have produced. A `grim`
+crop of the actual rendered palette (not just a full-desktop screenshot,
+which made this easy to miss) showed why: the card was rendering as a
+near-fully-blurred, see-through ghost of itself — another app's media
+player, album art included, was clearly visible *through* the palette's
+supposedly solid `var(--bg)` background.
+
+Root cause: `gtk-layer-shell` defaults every window to the literal
+namespace `"gtk-layer-shell"` unless the app sets its own, and this dev
+machine's Hyprland config (`~/.config/hypr/hyprland/rules.lua`, part of
+the dots-hyprland/"illogical impulse" rice) has:
+
+```lua
+hl.layer_rule({ match = { namespace = "gtk-layer-shell" }, blur = true})
+hl.layer_rule({ match = { namespace = "gtk-layer-shell" }, ignore_alpha = 0})
+```
+
+— rules clearly written for *some other* simple gtk-layer-shell-based
+utility that wants full blur passthrough, not a considered choice about
+Wield. Every app that never bothers to set its own namespace collides
+with whatever a user's compositor config assumes about "generic
+gtk-layer-shell apps."
+
+Fixed by calling `set_namespace()` (present in the `LayerShell` trait,
+previously unused) with a distinct name per window — `wield-palette`,
+`wield-preferences` — in `layer_shell::configure()`. Confirmed via a
+tight `grim` crop immediately after `ShowPalette`: solid, fully opaque
+card, no ghosting, before touching anything compositor-side.
+
+**Lesson**: a full-desktop screenshot can look "close enough" at a
+glance and hide a real rendering bug; always crop tightly to the actual
+surface being tested. And: never leave a layer-shell surface on the
+library's default namespace in a real app — a user's own compositor
+rules can already be targeting it for reasons that have nothing to do
+with your app.

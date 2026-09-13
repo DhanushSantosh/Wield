@@ -40,6 +40,19 @@ pub fn is_available() -> bool {
 /// Pass `None` for a fully centered surface (used for Preferences, which
 /// isn't a launcher and has no reason to sit near the top).
 ///
+/// `namespace` is set explicitly rather than left at gtk-layer-shell's
+/// default (which is literally the string `"gtk-layer-shell"`) because a
+/// compositor's own layer rules are matched by namespace, and a shared
+/// default namespace means picking up whatever a user's compositor config
+/// already does for *any* app using this library. Confirmed live: this
+/// dev machine's Hyprland config has `layerrule = ignorealpha 0,
+/// gtk-layer-shell` (paired with `blur = true`) — meant for some other
+/// generic gtk-layer-shell-based utility — which made the whole palette
+/// render as a near-fully-blurred, see-through ghost of itself, not the
+/// solid card the CSS actually specifies. A distinct per-window namespace
+/// means Wield only ever renders exactly what it asks for unless a user
+/// deliberately writes a rule matching it.
+///
 /// ## Keyboard mode: `Exclusive`, with a known, accepted tradeoff
 ///
 /// Neither of gtk-layer-shell's other keyboard modes works cleanly here
@@ -70,8 +83,9 @@ pub fn is_available() -> bool {
 ///   different mechanism (Wield detecting an outside click itself,
 ///   rather than relying on the compositor's normal focus handoff) turns
 ///   out to be worth the extra complexity.
-pub fn configure(window: &gtk::ApplicationWindow, top_margin_px: Option<i32>) {
+pub fn configure(window: &gtk::ApplicationWindow, top_margin_px: Option<i32>, namespace: &str) {
     window.init_layer_shell();
+    window.set_namespace(namespace);
     window.set_layer(Layer::Overlay);
     window.set_keyboard_mode(KeyboardMode::Exclusive);
     if let Some(margin) = top_margin_px {

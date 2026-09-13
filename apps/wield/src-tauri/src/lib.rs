@@ -184,7 +184,11 @@ pub fn run() {
                             // stays fully centered.
                             let top_margin = (*label == palette::LABEL)
                                 .then_some(layer_shell::PALETTE_TOP_MARGIN_PX);
-                            layer_shell::configure(window, top_margin);
+                            // A distinct namespace per window - see
+                            // layer_shell::configure's own doc comment for
+                            // why this isn't left at the library default.
+                            let namespace = format!("wield-{label}");
+                            layer_shell::configure(window, top_margin, &namespace);
                         }
                         tracing::info!("layer-shell positioning enabled");
                     }

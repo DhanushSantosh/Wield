@@ -6,7 +6,16 @@
 //! GNOME does not. [`is_available`] is the fail-closed gate, so unsupported
 //! sessions keep Tauri's existing window behavior unchanged.
 
-use gtk_layer_shell::{KeyboardMode, Layer, LayerShell};
+use gtk_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
+
+/// Distance in logical pixels from the top of the usable area (below any
+/// reserved bars/docks — gtk-layer-shell margins already account for those)
+/// to the palette's top edge. Keeps it near the top like Spotlight/Raycast
+/// rather than dead-center, and — because only the top edge is anchored —
+/// keeps that top edge fixed while the window's height animates, so
+/// resizing shrinks/grows the bottom edge instead of shifting the whole
+/// window up and down on every keystroke the way vertical centering would.
+pub const PALETTE_TOP_MARGIN_PX: i32 = 140;
 
 /// Returns whether the current session advertises `wlr-layer-shell`.
 ///
@@ -20,11 +29,16 @@ pub fn is_available() -> bool {
     gtk_layer_shell::is_supported()
 }
 
-/// Configures a not-yet-realized GTK window as a centered overlay surface.
+/// Configures a not-yet-realized GTK window as an overlay surface.
 ///
 /// Layer-shell surfaces are centered by default when no edges are anchored.
 /// Anchoring opposite edges would stretch the window and make GTK ignore its
-/// requested size.
+/// requested size, so `top_margin_px` anchors only the top edge — left and
+/// right stay unanchored, so the window is still horizontally centered, but
+/// vertical placement follows the margin from the top of the usable area
+/// (below any reserved bars/docks) instead of being vertically centered.
+/// Pass `None` for a fully centered surface (used for Preferences, which
+/// isn't a launcher and has no reason to sit near the top).
 ///
 /// ## Keyboard mode: `Exclusive`, with a known, accepted tradeoff
 ///
@@ -56,10 +70,14 @@ pub fn is_available() -> bool {
 ///   different mechanism (Wield detecting an outside click itself,
 ///   rather than relying on the compositor's normal focus handoff) turns
 ///   out to be worth the extra complexity.
-pub fn configure(window: &gtk::ApplicationWindow) {
+pub fn configure(window: &gtk::ApplicationWindow, top_margin_px: Option<i32>) {
     window.init_layer_shell();
     window.set_layer(Layer::Overlay);
     window.set_keyboard_mode(KeyboardMode::Exclusive);
+    if let Some(margin) = top_margin_px {
+        window.set_anchor(Edge::Top, true);
+        window.set_layer_shell_margin(Edge::Top, margin);
+    }
 }
 
 // `gtk_layer_try_force_commit` is declared by hand: it exists in the

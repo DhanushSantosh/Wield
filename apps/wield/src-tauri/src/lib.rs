@@ -165,19 +165,26 @@ pub fn run() {
                 let gtk_windows = [palette::LABEL, preferences::LABEL]
                     .into_iter()
                     .map(|label| {
-                        app.get_webview_window(label)
+                        let window = app
+                            .get_webview_window(label)
                             .ok_or_else(|| format!("window {label:?} is missing"))?
                             .gtk_window()
                             .map_err(|error| {
                                 format!("could not get GTK handle for window {label:?}: {error}")
-                            })
+                            })?;
+                        Ok((label, window))
                     })
                     .collect::<Result<Vec<_>, String>>();
 
                 match gtk_windows {
                     Ok(windows) => {
-                        for window in &windows {
-                            layer_shell::configure(window);
+                        for (label, window) in &windows {
+                            // Only the palette sits near the top, like a
+                            // launcher; Preferences is a settings dialog and
+                            // stays fully centered.
+                            let top_margin = (*label == palette::LABEL)
+                                .then_some(layer_shell::PALETTE_TOP_MARGIN_PX);
+                            layer_shell::configure(window, top_margin);
                         }
                         tracing::info!("layer-shell positioning enabled");
                     }

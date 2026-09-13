@@ -287,3 +287,61 @@ main thread) and raw GTK objects are not thread-safe, this caused the
 `ShowPalette` D-Bus call to hang outright (`busctl` reported "Connection
 timed out"). Fixed by wrapping the same way the resize code already
 correctly does.
+
+### A second, distinct non-rendering bug — deterministic this time, and unrelated to `force_commit`
+
+Still on 2026-09-13, combining the `force_commit` fix above with the
+dynamic-resize feature (`feat/dynamic-palette-resize`) for a joint test
+turned up a second, worse bug: the palette failed to render on **every**
+fresh launch (not intermittently) once resize was in the build, even with
+`force_commit` in place.
+
+Found a much faster and more precise signal than screenshots for this:
+`hyprctl layers -j` reports an `alpha` field per layer surface. A working
+palette reports `alpha: 1`; this one reported `alpha: 0` — and stayed at
+`0` indefinitely (polled every 100ms for 2 seconds) rather than animating
+through and settling on `1`, i.e. genuinely stuck, not mid-transition.
+
+Root-caused by elimination, in order:
+
+1. Suspected the resize animation itself (twelve rapid
+   `set_size_request()` + `resize(1, 1)` calls in 180ms right after
+   `show()`) was overwhelming the single `force_commit()` call. Added a
+   second `force_commit()` after every resize step. **No change** —
+   `alpha` still stuck at 0, 5/5 fresh launches.
+2. Disabled the resize animation entirely (temporarily made
+   `animate_to_height` a no-op) to isolate whether resize was involved at
+   all. **Still no change** — `alpha` still stuck at 0, 5/5 fresh
+   launches, with *no* resize code running whatsoever. This ruled out
+   resize, and by extension `force_commit`, completely.
+3. Re-tested the isolated `fix/layer-shell-keyboard-focus` branch (the one
+   the original 5/5 `force_commit` verification above was done on) fresh,
+   using this same `alpha` check instead of eyeballing screenshots: a
+   clean 5/5 at `alpha: 1`. So something genuinely differed between that
+   branch and the combined one — not a re-run of the same flake.
+4. Diffed the two branches. One line stood out immediately in
+   `apps/wield/src-tauri/tauri.conf.json`: the combined branch had flipped
+   the palette window's `"resizable"` from `false` to `true` (presumably
+   while building the resize feature, on the assumption a
+   programmatically-resized window needs to be marked resizable — it
+   doesn't; `gtk_window_resize()` works regardless). Flipped it back to
+   `false` with everything else (resize code included, `force_commit`
+   included) left untouched, rebuilt, and re-ran the stress test: **10/10
+   fresh launches at `alpha: 1`**, correct final geometry
+   (`720×216`, re-centered correctly), and a visual `grim` screenshot
+   confirming the palette actually on screen.
+
+So `resizable: true` on a `gtk-layer-shell` surface reliably breaks
+rendering outright on this Hyprland version — a separate, deterministic
+bug, not a rarer version of the `force_commit` flake, and not fixed by
+`force_commit` at all. The per-step `force_commit` addition from step 1
+above was reverted (`git stash drop`) once the real cause was found — it
+wasn't wrong to try, but it wasn't the fix, and keeping unnecessary
+workarounds around makes the next investigation harder, not easier.
+
+**Lesson**: `hyprctl layers`' `alpha` field is a much more precise
+diagnostic for "is this surface actually rendering" than a screenshot —
+it's instant, scriptable, and distinguishes "still animating" from
+"genuinely stuck" in a way a single screenshot can't. Prefer it over
+`grim` for this specific class of bug going forward; keep `grim` for
+confirming what's *visually* on screen once `alpha` says it should be.

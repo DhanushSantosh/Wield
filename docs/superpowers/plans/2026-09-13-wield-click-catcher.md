@@ -21,15 +21,102 @@
 
 ---
 
-### Task 1: `AppState` plumbing for a thread-confined GTK handle
+### Task 1: `force_commit` generalized from `&gtk::ApplicationWindow` to `&gtk::Window`
+
+> **Pre-flight ruling:** this task and Task 2 were swapped from the order
+> they were first drafted in. Task 2's `show_click_catcher` calls
+> `force_commit` on the catcher (a fix for a real gap found in the
+> pre-flight scan — see Task 2's own note) and needs this task's widened
+> signature to already exist to do that; the two tasks have no other
+> dependency on each other in either direction, so the swap is safe.
+
+**Files:**
+- Modify: `apps/wield/src-tauri/src/layer_shell.rs`
+- Modify: `apps/wield/src-tauri/src/palette.rs:49-51` (the one existing call site)
+
+**Interfaces:**
+- Consumes: nothing new.
+- Produces: `layer_shell::force_commit(window: &gtk::Window)` (signature changed from `&gtk::ApplicationWindow`) — Task 2's `AppState::show_click_catcher` and Task 3's click-catcher creation code both depend on this exact signature, since the catcher is a plain `gtk::Window`, not an `ApplicationWindow`.
+
+The catcher is the same class of gtk-layer-shell surface as the palette (both `wlr-layer-shell` overlays created via the same, already-unmaintained bindings) and so is just as exposed to the non-rendering flake `force_commit` exists to work around (spec §4.1) — cheap and proven to apply defensively, but it currently only accepts `&gtk::ApplicationWindow`, and the catcher is a plain `gtk::Window`. The function's own body already immediately converts its argument to `&gtk::Window` internally (`let window: &gtk::Window = window.as_ref();`), so this is a widening of the parameter type to what the function already needed internally, not a behavior change.
+
+- [ ] **Step 1: Change the signature and remove the now-redundant internal conversion**
+
+In `apps/wield/src-tauri/src/layer_shell.rs`, change:
+
+```rust
+pub fn force_commit(window: &gtk::ApplicationWindow) {
+    use gtk::glib::translate::ToGlibPtr;
+    let window: &gtk::Window = window.as_ref();
+    if !window.is_layer_window() {
+```
+
+to:
+
+```rust
+pub fn force_commit(window: &gtk::Window) {
+    use gtk::glib::translate::ToGlibPtr;
+    if !window.is_layer_window() {
+```
+
+(the rest of the function body is unchanged — `window.is_layer_window()` and `window.to_glib_none().0` both already work directly on `&gtk::Window`).
+
+Update the function's doc comment (currently describes taking a window "that was never turned into a layer surface"; no wording about `ApplicationWindow` specifically needs to change, so check it still reads correctly — it does, since it never named the concrete type).
+
+- [ ] **Step 2: Update the one existing call site**
+
+In `apps/wield/src-tauri/src/palette.rs`, in `show()`:
+
+```rust
+    if let Err(error) = window.run_on_main_thread(move || match for_main_thread.gtk_window() {
+        Ok(gtk_window) => crate::layer_shell::force_commit(&gtk_window),
+        Err(error) => tracing::warn!(%error, "could not get GTK handle to force-commit palette"),
+    }) {
+```
+
+becomes:
+
+```rust
+    if let Err(error) = window.run_on_main_thread(move || match for_main_thread.gtk_window() {
+        Ok(gtk_window) => {
+            let gtk_window: &gtk::Window = gtk_window.as_ref();
+            crate::layer_shell::force_commit(gtk_window)
+        }
+        Err(error) => tracing::warn!(%error, "could not get GTK handle to force-commit palette"),
+    }) {
+```
+
+- [ ] **Step 3: Run the workspace build to confirm both changes compile together**
+
+Run: `cargo build --release -p wield-app`
+Expected: builds clean, no type errors.
+
+- [ ] **Step 4: Run layer_shell.rs's existing test to confirm no regression**
+
+Run: `cd apps/wield/src-tauri && cargo test layer_shell::`
+Expected: `is_available_never_panics_without_a_display` passes (unchanged — this task doesn't touch `is_available`).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add apps/wield/src-tauri/src/layer_shell.rs apps/wield/src-tauri/src/palette.rs
+git commit -m "refactor(layer-shell): widen force_commit to accept any gtk::Window"
+```
+
+---
+
+### Task 2: `AppState` plumbing for a thread-confined GTK handle
 
 **Files:**
 - Modify: `apps/wield/src-tauri/src/state.rs`
 
 **Interfaces:**
+- Consumes: `layer_shell::force_commit(&gtk::Window)` (Task 1).
 - Produces: `AppState::set_click_catcher(&self, window: gtk::Window)`, `AppState::show_click_catcher(&self)`, `AppState::hide_click_catcher(&self)` — all three must only be called from the GTK main thread (documented on each). Later tasks depend on exactly these three names and signatures.
 
 `AppState` must stay `Send + Sync` (Tauri's `.manage()`/`State<T>` require it), but a raw `gtk::Window` is not `Send`. A small wrapper that asserts `Send` — sound only because every access in this codebase is already disciplined to the GTK main thread via `run_on_main_thread` — resolves this the same way this codebase already accepts other "unsafe, but the invariant is upheld everywhere it's used" tradeoffs (see `layer_shell::force_commit`'s hand-written `extern "C"` block for the precedent).
+
+`show_click_catcher` also calls `force_commit` right after showing the window, mirroring exactly how `palette::show()` already does — the catcher is the same class of gtk-layer-shell surface, just as exposed to the non-rendering flake `force_commit` exists to work around (spec §4.1), and it's cheap enough to apply defensively regardless.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -101,15 +188,19 @@ Add to `impl AppState`, after `set_hotkey_controller`:
             .expect("click catcher lock") = Some(MainThreadOnly(window));
     }
 
-    /// Shows the click-catcher alongside the palette. A no-op if it was
-    /// never created (X11/GNOME) or hasn't been registered yet. Must only
-    /// be called from the GTK main thread - see `MainThreadOnly`.
+    /// Shows the click-catcher alongside the palette, and force-commits
+    /// it (see layer_shell::force_commit) exactly like palette::show()
+    /// does for the palette itself - the same class of surface, exposed
+    /// to the same flake. A no-op if it was never created (X11/GNOME) or
+    /// hasn't been registered yet. Must only be called from the GTK main
+    /// thread - see `MainThreadOnly`.
     pub fn show_click_catcher(&self) {
         use gtk::prelude::WidgetExt;
         if let Some(MainThreadOnly(window)) =
             self.click_catcher.lock().expect("click catcher lock").as_ref()
         {
             window.show();
+            crate::layer_shell::force_commit(window);
         }
     }
 
@@ -144,83 +235,6 @@ git commit -m "feat(state): add thread-confined storage for the click-catcher wi
 
 ---
 
-### Task 2: `force_commit` generalized from `&gtk::ApplicationWindow` to `&gtk::Window`
-
-**Files:**
-- Modify: `apps/wield/src-tauri/src/layer_shell.rs`
-- Modify: `apps/wield/src-tauri/src/palette.rs:49-51` (the one existing call site)
-
-**Interfaces:**
-- Consumes: nothing new.
-- Produces: `layer_shell::force_commit(window: &gtk::Window)` (signature changed from `&gtk::ApplicationWindow`) — Task 3's click-catcher creation code depends on this exact signature, since the catcher is a plain `gtk::Window`, not an `ApplicationWindow`.
-
-The catcher is the same class of gtk-layer-shell surface as the palette (both `wlr-layer-shell` overlays created via the same, already-unmaintained bindings) and so is just as exposed to the non-rendering flake `force_commit` exists to work around (spec §4.1) — cheap and proven to apply defensively, but it currently only accepts `&gtk::ApplicationWindow`, and the catcher is a plain `gtk::Window`. The function's own body already immediately converts its argument to `&gtk::Window` internally (`let window: &gtk::Window = window.as_ref();`), so this is a widening of the parameter type to what the function already needed internally, not a behavior change.
-
-- [ ] **Step 1: Change the signature and remove the now-redundant internal conversion**
-
-In `apps/wield/src-tauri/src/layer_shell.rs`, change:
-
-```rust
-pub fn force_commit(window: &gtk::ApplicationWindow) {
-    use gtk::glib::translate::ToGlibPtr;
-    let window: &gtk::Window = window.as_ref();
-    if !window.is_layer_window() {
-```
-
-to:
-
-```rust
-pub fn force_commit(window: &gtk::Window) {
-    use gtk::glib::translate::ToGlibPtr;
-    if !window.is_layer_window() {
-```
-
-(the rest of the function body is unchanged — `window.is_layer_window()` and `window.to_glib_none().0` both already work directly on `&gtk::Window`).
-
-Update the function's doc comment (currently describes taking a window "that was never turned into a layer surface"; no wording about `ApplicationWindow` specifically needs to change, so check it still reads correctly — it does, since it never named the concrete type).
-
-- [ ] **Step 2: Update the one existing call site**
-
-In `apps/wield/src-tauri/src/palette.rs`, in `show()`:
-
-```rust
-    if let Err(error) = window.run_on_main_thread(move || match for_main_thread.gtk_window() {
-        Ok(gtk_window) => crate::layer_shell::force_commit(&gtk_window),
-        Err(error) => tracing::warn!(%error, "could not get GTK handle to force-commit palette"),
-    }) {
-```
-
-becomes:
-
-```rust
-    if let Err(error) = window.run_on_main_thread(move || match for_main_thread.gtk_window() {
-        Ok(gtk_window) => {
-            let gtk_window: &gtk::Window = gtk_window.as_ref();
-            crate::layer_shell::force_commit(gtk_window)
-        }
-        Err(error) => tracing::warn!(%error, "could not get GTK handle to force-commit palette"),
-    }) {
-```
-
-- [ ] **Step 3: Run the workspace build to confirm both changes compile together**
-
-Run: `cargo build --release -p wield-app`
-Expected: builds clean, no type errors.
-
-- [ ] **Step 4: Run layer_shell.rs's existing test to confirm no regression**
-
-Run: `cd apps/wield/src-tauri && cargo test layer_shell::`
-Expected: `is_available_never_panics_without_a_display` passes (unchanged — this task doesn't touch `is_available`).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add apps/wield/src-tauri/src/layer_shell.rs apps/wield/src-tauri/src/palette.rs
-git commit -m "refactor(layer-shell): widen force_commit to accept any gtk::Window"
-```
-
----
-
 ### Task 3: `click_catcher.rs` — the surface itself
 
 **Files:**
@@ -228,7 +242,7 @@ git commit -m "refactor(layer-shell): widen force_commit to accept any gtk::Wind
 - Modify: `apps/wield/src-tauri/src/lib.rs` (add `mod click_catcher;` to the module list — the `create_and_register` call itself is wired in Task 5, not here, to keep this task's deliverable to "the module compiles and its own gate is tested")
 
 **Interfaces:**
-- Consumes: `layer_shell::is_available()` (existing), `layer_shell::force_commit(&gtk::Window)` (Task 2), `AppState::set_click_catcher` (Task 1).
+- Consumes: `layer_shell::is_available()` (existing), `layer_shell::force_commit(&gtk::Window)` (Task 1), `AppState::set_click_catcher` (Task 2).
 - Produces: `click_catcher::create_and_register(app: &tauri::AppHandle)` — Task 5 depends on this exact name and signature.
 
 - [ ] **Step 1: Write the module with its one gating test**
@@ -374,14 +388,14 @@ git commit -m "feat(click-catcher): add the full-screen invisible catcher surfac
 - Modify: `apps/wield/src-tauri/src/palette.rs`
 
 **Interfaces:**
-- Consumes: `AppState::show_click_catcher()`, `AppState::hide_click_catcher()` (Task 1).
+- Consumes: `AppState::show_click_catcher()`, `AppState::hide_click_catcher()` (Task 2).
 - Produces: nothing new — `palette::show`/`hide`'s existing signatures are unchanged, only their bodies grow.
 
 `hide()` currently has no `run_on_main_thread` dispatch at all (Tauri's own `WebviewWindow::hide()` handles its own thread-safety) - it needs one now, since it's about to also touch a raw GTK object (the catcher) via `AppState`.
 
 - [ ] **Step 1: Extend `show()` to also show the catcher**
 
-In `apps/wield/src-tauri/src/palette.rs`, Task 2 left the `run_on_main_thread` closure in `show()` looking like this:
+In `apps/wield/src-tauri/src/palette.rs`, Task 1 left the `run_on_main_thread` closure in `show()` looking like this:
 
 ```rust
     let for_main_thread = window.clone();

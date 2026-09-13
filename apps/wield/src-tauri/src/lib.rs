@@ -5,6 +5,7 @@ use tauri::Manager;
 use wield_core::{Stage, ToolOutcome};
 
 pub mod capabilities;
+mod click_catcher;
 pub mod commands;
 pub mod instance;
 mod layer_shell;

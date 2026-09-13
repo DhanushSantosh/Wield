@@ -99,6 +99,17 @@ export async function hidePalette(): Promise<void> {
   return invoke<void>("hide_palette");
 }
 
+/**
+ * Re-shows the palette after it was hidden for something other than the
+ * user dismissing it - see FormField's file/folder pickers, which hide it
+ * first to release its KeyboardMode::Exclusive grab (see layer_shell.rs)
+ * so a native file-chooser dialog can actually receive input, then bring
+ * it back afterward.
+ */
+export async function showPalette(): Promise<void> {
+  return invoke<void>("show_palette");
+}
+
 /** Smoothly resizes the palette window's height to `height` (logical pixels). */
 export async function resizePalette(height: number): Promise<void> {
   return invoke<void>("resize_palette", { height });

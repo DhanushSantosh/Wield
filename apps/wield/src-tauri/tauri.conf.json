@@ -21,6 +21,7 @@
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "resizable": false,
+        "transparent": true,
         "visible": false
       },
       {

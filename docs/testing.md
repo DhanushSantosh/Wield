@@ -385,3 +385,50 @@ surface being tested. And: never leave a layer-shell surface on the
 library's default namespace in a real app — a user's own compositor
 rules can already be targeting it for reasons that have nothing to do
 with your app.
+
+### Removing the card's side margin broke its rounded corners
+
+Once the ghosting above was fixed, live feedback made clear the ~40px
+per-side gap between the card and the window (`.app-shell`'s
+`max-width` vs. the window's own width) read as dead space, not
+intentional framing. Removing it entirely (card = window width) fixed
+that, but broke the corners: `border-radius: 15px` on `.app-shell`
+started rendering as a hard 90° corner instead of a curve, confirmed
+with a `grim` crop zoomed into just one corner.
+
+The window was never given Tauri's `"transparent": true` config flag.
+Best-guess mechanism (not independently confirmed in the compositor's
+own source, but consistent with every observation): GTK/Wayland
+toolkits track an "opaque region" per surface as a rendering
+optimization - the area a compositor can skip alpha-blending entirely.
+With the card smaller than the window, part of the surface was never
+painted with any opaque color at all, so the toolkit correctly inferred
+a non-opaque region and blended it properly (rounded corners included).
+Once the card's own solid background covered 100% of the window, the
+toolkit likely inferred the *entire* surface as opaque, and the
+rounded corner's own transparent cutout - which depends on real
+per-pixel alpha blending - got clamped to opaque too.
+
+Adding `"transparent": true` restored a curve, but a badly-aliased one:
+zoomed in, the cutout area was a blocky, dithered blue-gray, not the
+smooth flat blue confirmed to actually be there (hid the palette,
+screenshotted the same exact pixels, compared directly). Something
+about compositing real per-pixel alpha at the *exact* window edge, with
+zero margin, produces poor-quality output even when it technically
+isn't opaque anymore.
+
+Landed a middle ground instead of chasing pixel-perfect edge-of-surface
+alpha further: `max-width: calc(100% - 40px)` - a 20px margin per side,
+just past the 15px corner radius so the curve has room to fully form.
+Confirmed clean (smooth curve, no artifact, matching the quality of the
+very first working screenshots) via the same hide-and-compare method.
+20px reads as "this has rounded corners" rather than "there's empty
+space here" - a real, load-bearing distinction that cost several rounds
+of live feedback to actually pin down precisely.
+
+**Lesson**: "no margin" and "a small margin" are not points on the same
+continuum as far as rendering quality goes on this stack - zero margin
+hit a real, qualitatively different code path (whole-surface-opaque
+inference) than even a small nonzero one. When chasing a "make the gap
+smaller" request, verify the *smallest* gap that still works before
+assuming zero is just the limit of the same trend.

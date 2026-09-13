@@ -36,10 +36,23 @@ body {
 .app-shell {
   background: var(--bg);
   border-radius: 15px;
+  /* A tighter falloff than before (was 0 20px 50px) - that needed ~40px
+     of clearance on every side to avoid hard clipping, which is exactly
+     the width the window was shrunk to give it. Fully filling the
+     window's width instead needs a shadow that doesn't ask for room the
+     window no longer sets aside. */
   box-shadow:
-    0 20px 50px rgba(0, 0, 0, 0.6),
+    0 8px 24px rgba(0, 0, 0, 0.55),
     0 0 0 1px var(--border);
-  max-width: 440px;
+  /* A small margin, just past the corner radius itself, not the old
+     ~40px gap - a rounded corner needs *some* room past the window's own
+     edge to actually render as a smooth curve rather than a jagged,
+     badly-dithered cutout (confirmed live: at true 0 margin, even with
+     the window's `transparent` flag on, the corner rendered as a blocky
+     artifact, not the clean curve this same radius produces with room
+     to breathe). 20px is enough for the 15px radius with a few px to
+     spare, and reads as "rounded corner", not "empty space on the side". */
+  max-width: calc(100% - 40px);
   margin: 0 auto;
   overflow: hidden;
   transition: max-height 160ms ease;

@@ -9,6 +9,7 @@ pub mod color_pick;
 pub mod document_convert;
 pub mod image_convert;
 pub mod pdf_compress;
+pub mod pdf_merge;
 pub mod video_convert;
 
 use wield_core::Registry;
@@ -32,6 +33,9 @@ pub fn builtin_registry() -> Registry {
     registry
         .register(pdf_compress::descriptor())
         .expect("pdf.compress registers");
+    registry
+        .register(pdf_merge::descriptor())
+        .expect("pdf.merge registers");
     registry
         .register(video_convert::descriptor())
         .expect("video.convert registers");

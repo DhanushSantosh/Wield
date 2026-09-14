@@ -268,6 +268,37 @@ fn pdf_compress_renders_the_ghostscript_argv() {
 }
 
 #[test]
+fn pdf_merge_spreads_every_selected_file_before_the_separator() {
+    let tool = builtin_registry().get("pdf.merge").unwrap().clone();
+    let Capability::Command(spec) = &tool.capability else {
+        panic!("expected Command");
+    };
+
+    let mut args = BTreeMap::new();
+    args.insert(
+        "input".to_string(),
+        ArgValue::Paths(vec![
+            "/docs/a.pdf".into(),
+            "/docs/b.pdf".into(),
+            "/docs/c.pdf".into(),
+        ]),
+    );
+    let out = std::path::PathBuf::from("/docs/a-merged.pdf");
+    assert_eq!(
+        render_argv(&spec.args, &args, Some(&out)).unwrap(),
+        vec![
+            "--empty".to_string(),
+            "--pages".into(),
+            "/docs/a.pdf".into(),
+            "/docs/b.pdf".into(),
+            "/docs/c.pdf".into(),
+            "--".into(),
+            "/docs/a-merged.pdf".into(),
+        ],
+    );
+}
+
+#[test]
 fn registry_has_exactly_the_expected_builtins() {
     let ids: Vec<_> = builtin_registry()
         .list()
@@ -282,6 +313,7 @@ fn registry_has_exactly_the_expected_builtins() {
             "document.convert",
             "image.convert",
             "pdf.compress",
+            "pdf.merge",
             "video.convert"
         ]
     );

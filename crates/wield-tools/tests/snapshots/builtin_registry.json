@@ -645,6 +645,81 @@
     }
   },
   {
+    "id": "pdf.merge",
+    "title": "Merge PDFs",
+    "keywords": [
+      "pdf",
+      "merge",
+      "combine",
+      "join",
+      "qpdf"
+    ],
+    "category": "Convert",
+    "args": [
+      {
+        "name": "input",
+        "label": "PDFs",
+        "help": null,
+        "arg_type": {
+          "File": {
+            "filters": [
+              {
+                "label": "PDF",
+                "extensions": [
+                  "pdf"
+                ]
+              }
+            ],
+            "multiple": true
+          }
+        },
+        "default": null,
+        "required": true,
+        "when": null
+      }
+    ],
+    "requires": {
+      "Binary": "qpdf"
+    },
+    "output": {
+      "File": {
+        "name": "{input_stem}-merged.pdf",
+        "dir": "SameAsInput"
+      }
+    },
+    "capability": {
+      "Command": {
+        "binary": "qpdf",
+        "args": [
+          {
+            "template": "--empty",
+            "when": null
+          },
+          {
+            "template": "--pages",
+            "when": null
+          },
+          {
+            "template": "{input}",
+            "when": null
+          },
+          {
+            "template": "--",
+            "when": null
+          },
+          {
+            "template": "{output}",
+            "when": null
+          }
+        ],
+        "progress": "None",
+        "timeout": 300,
+        "success": "ExitZero",
+        "combine_inputs": true
+      }
+    }
+  },
+  {
     "id": "video.convert",
     "title": "Convert video",
     "keywords": [

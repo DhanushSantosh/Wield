@@ -231,6 +231,7 @@ mod tests {
                 "document.convert",
                 "image.convert",
                 "pdf.compress",
+                "pdf.merge",
                 "video.convert"
             ]
         );

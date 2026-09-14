@@ -48,6 +48,7 @@ fn check_arg_names(args: &[ArgSpec], errors: &mut Vec<DescriptorError>) {
 }
 
 fn check_arg_types(args: &[ArgSpec], errors: &mut Vec<DescriptorError>) {
+    let mut multi_file_args = Vec::new();
     for (index, arg) in args.iter().enumerate() {
         match &arg.arg_type {
             ArgType::Int { range, step } => {
@@ -94,6 +95,9 @@ fn check_arg_types(args: &[ArgSpec], errors: &mut Vec<DescriptorError>) {
                     );
                 }
             }
+            ArgType::File { multiple: true, .. } => {
+                multi_file_args.push(index);
+            }
             _ => {}
         }
 
@@ -112,6 +116,22 @@ fn check_arg_types(args: &[ArgSpec], errors: &mut Vec<DescriptorError>) {
                 );
             }
         }
+    }
+
+    if multi_file_args.len() > 1 {
+        let indices = multi_file_args
+            .iter()
+            .map(|index| format!("args[{index}]"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        error(
+            errors,
+            "args",
+            format!(
+                "a descriptor may have at most one `multiple: true` File argument, found {}: {indices}",
+                multi_file_args.len()
+            ),
+        );
     }
 }
 
@@ -248,18 +268,12 @@ fn check_template(
         }
 
         if matches!(token.as_str(), "input" | "input_stem" | "input_dir") {
-            let valid_input = matches!(
-                positions.get("input"),
-                Some(ArgType::File {
-                    multiple: false,
-                    ..
-                })
-            );
+            let valid_input = matches!(positions.get("input"), Some(ArgType::File { .. }));
             if !valid_input {
                 error(
                     errors,
                     &at,
-                    format!("{token} requires a single-file input argument"),
+                    format!("{token} requires a file input argument"),
                 );
             }
             continue;

@@ -36,7 +36,8 @@ type View =
       tool: ToolSummary;
       values: Record<string, unknown>;
       runId: RunId | null;
-      progress: Progress | null;
+      message: string | null;
+      percent: number | null;
       viaRunAgain: boolean;
     }
   | {
@@ -107,14 +108,31 @@ function reducer(state: State, action: Action): State {
           tool: action.tool,
           values: action.values,
           runId: action.runId,
-          progress: null,
+          message: null,
+          percent: null,
           viaRunAgain: action.viaRunAgain,
         },
       };
-    case "PROGRESS":
-      return state.view.kind === "running"
-        ? { ...state, view: { ...state.view, progress: action.progress } }
-        : state;
+    case "PROGRESS": {
+      if (state.view.kind !== "running") return state;
+      const { progress } = action;
+      if (progress === "Started") {
+        // A new file (or the run's only file) is starting - clear the
+        // previous file's percent so its bar doesn't linger. Keep
+        // `message`: a batch's "Converting N of M" label was just set by
+        // the Message event that preceded this Started event.
+        return { ...state, view: { ...state.view, percent: null } };
+      }
+      if (typeof progress === "object" && "Message" in progress) {
+        return { ...state, view: { ...state.view, message: progress.Message, percent: null } };
+      }
+      if (typeof progress === "object" && "Percent" in progress) {
+        return { ...state, view: { ...state.view, percent: progress.Percent } };
+      }
+      // "Finished" - no visible change; FINISHED (a separate action) drives
+      // the transition to the result view.
+      return state;
+    }
     case "FINISHED":
       if (action.outcome === "Cancelled") return { ...state, view: { kind: "search" } };
       return {
@@ -404,7 +422,13 @@ export default function App() {
       />
     );
   } else if (state.view.kind === "running") {
-    content = <RunningView toolTitle={state.view.tool.title} progress={state.view.progress} />;
+    content = (
+      <RunningView
+        toolTitle={state.view.tool.title}
+        message={state.view.message}
+        percent={state.view.percent}
+      />
+    );
   } else {
     const result = state.view;
     content = (

@@ -6,6 +6,7 @@
 
 pub mod color_pick;
 pub mod image_convert;
+pub mod video_convert;
 
 use wield_core::Registry;
 
@@ -19,5 +20,8 @@ pub fn builtin_registry() -> Registry {
     registry
         .register(image_convert::descriptor())
         .expect("image.convert registers");
+    registry
+        .register(video_convert::descriptor())
+        .expect("video.convert registers");
     registry
 }

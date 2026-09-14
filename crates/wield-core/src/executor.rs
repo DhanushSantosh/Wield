@@ -158,6 +158,14 @@ impl Executor {
         progress: mpsc::Sender<Progress>,
         cancel: CancellationToken,
     ) -> ToolOutcome {
+        if let Some((arg_name, paths)) = batch_paths(effective) {
+            return self
+                .run_batch(
+                    descriptor, command, effective, arg_name, &paths, progress, cancel,
+                )
+                .await;
+        }
+
         let output_path = match compute_output_path(&descriptor.output, effective) {
             Ok(path) => path,
             Err(error) => return failed(Stage::Output, error.to_string()),
@@ -223,6 +231,61 @@ impl Executor {
             }
         }
     }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn run_batch(
+        &self,
+        descriptor: &Descriptor,
+        command: &crate::descriptor::CommandSpec,
+        effective: &ArgMap,
+        arg_name: &str,
+        paths: &[std::path::PathBuf],
+        progress: mpsc::Sender<Progress>,
+        cancel: CancellationToken,
+    ) -> ToolOutcome {
+        let mut lines = Vec::with_capacity(paths.len());
+        let mut succeeded = 0usize;
+        for (index, path) in paths.iter().enumerate() {
+            if cancel.is_cancelled() {
+                return ToolOutcome::Cancelled;
+            }
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.to_string_lossy().into_owned());
+            let _ = progress.try_send(Progress::Message(format!(
+                "Converting {} of {}: {name}",
+                index + 1,
+                paths.len()
+            )));
+            let mut single = effective.clone();
+            single.insert(arg_name.to_owned(), ArgValue::Path(path.clone()));
+            // `run_command`'s new batch check above only matches when
+            // `effective` itself holds a `Paths` value - `single` never
+            // does, so this recursive call takes the normal single-file
+            // path, not another batch iteration.
+            let outcome = Box::pin(self.run_command(
+                descriptor,
+                command,
+                &single,
+                progress.clone(),
+                cancel.clone(),
+            ))
+            .await;
+            match outcome {
+                ToolOutcome::File { path } => {
+                    succeeded += 1;
+                    lines.push(format!("\u{2713} {name} \u{2192} {}", path.display()));
+                }
+                ToolOutcome::Cancelled => return ToolOutcome::Cancelled,
+                other => lines.push(format!("\u{2717} {name}: {}", outcome_summary(&other))),
+            }
+        }
+        ToolOutcome::Report {
+            title: format!("{succeeded} of {} converted", paths.len()),
+            lines,
+        }
+    }
 }
 
 fn failed(stage: Stage, detail: impl Into<String>) -> ToolOutcome {
@@ -242,4 +305,22 @@ fn unavailable_binary(binary: &str) -> ToolOutcome {
 
 fn join_errors(errors: impl Iterator<Item = String>) -> String {
     errors.collect::<Vec<_>>().join("\n")
+}
+
+fn batch_paths(effective: &ArgMap) -> Option<(&str, Vec<std::path::PathBuf>)> {
+    effective.iter().find_map(|(name, value)| match value {
+        ArgValue::Paths(paths) => Some((name.as_str(), paths.clone())),
+        _ => None,
+    })
+}
+
+fn outcome_summary(outcome: &ToolOutcome) -> String {
+    match outcome {
+        ToolOutcome::Failed { detail, hint, .. } => match hint {
+            Some(hint) => format!("{detail} — {hint}"),
+            None => detail.clone(),
+        },
+        ToolOutcome::Unavailable { reason, .. } => reason.clone(),
+        other => format!("{other:?}"),
+    }
 }

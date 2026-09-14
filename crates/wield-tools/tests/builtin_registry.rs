@@ -44,13 +44,59 @@ fn image_convert_renders_magick_argv_for_present_and_absent_options() {
 }
 
 #[test]
+fn video_convert_renders_ffmpeg_argv_for_present_and_absent_options() {
+    let tool = builtin_registry().get("video.convert").unwrap().clone();
+    let Capability::Command(spec) = &tool.capability else {
+        panic!("expected Command");
+    };
+
+    let mut minimal = BTreeMap::new();
+    minimal.insert("input".to_string(), ArgValue::Path("/clips/a.mov".into()));
+    minimal.insert("format".to_string(), ArgValue::Str("mp4".into()));
+    minimal.insert("resolution".to_string(), ArgValue::Str("original".into()));
+    let out = std::path::PathBuf::from("/clips/a.mp4");
+    assert_eq!(
+        render_argv(&spec.args, &minimal, Some(&out)).unwrap(),
+        vec![
+            "-y".to_string(),
+            "-i".into(),
+            "/clips/a.mov".into(),
+            "-progress".into(),
+            "pipe:2".into(),
+            "-nostats".into(),
+            "/clips/a.mp4".into(),
+        ],
+    );
+
+    let mut full = minimal.clone();
+    full.insert("resolution".to_string(), ArgValue::Str("720p".into()));
+    full.insert("quality".to_string(), ArgValue::Int(23));
+    assert_eq!(
+        render_argv(&spec.args, &full, Some(&out)).unwrap(),
+        vec![
+            "-y".to_string(),
+            "-i".into(),
+            "/clips/a.mov".into(),
+            "-vf".into(),
+            "scale=-2:720".into(),
+            "-crf".into(),
+            "23".into(),
+            "-progress".into(),
+            "pipe:2".into(),
+            "-nostats".into(),
+            "/clips/a.mp4".into(),
+        ],
+    );
+}
+
+#[test]
 fn registry_has_exactly_the_expected_builtins() {
     let ids: Vec<_> = builtin_registry()
         .list()
         .iter()
         .map(|d| d.id.as_ref().to_string())
         .collect();
-    assert_eq!(ids, vec!["color.pick", "image.convert"]);
+    assert_eq!(ids, vec!["color.pick", "image.convert", "video.convert"]);
 }
 
 #[test]

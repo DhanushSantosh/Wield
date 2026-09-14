@@ -720,6 +720,73 @@
     }
   },
   {
+    "id": "pdf.split",
+    "title": "Split PDF",
+    "keywords": [
+      "pdf",
+      "split",
+      "pages",
+      "extract",
+      "qpdf"
+    ],
+    "category": "Convert",
+    "args": [
+      {
+        "name": "input",
+        "label": "PDF",
+        "help": null,
+        "arg_type": {
+          "File": {
+            "filters": [
+              {
+                "label": "PDF",
+                "extensions": [
+                  "pdf"
+                ]
+              }
+            ],
+            "multiple": false
+          }
+        },
+        "default": null,
+        "required": true,
+        "when": null
+      }
+    ],
+    "requires": {
+      "Binary": "qpdf"
+    },
+    "output": {
+      "Directory": {
+        "name": "{input_stem}",
+        "dir": "SameAsInput"
+      }
+    },
+    "capability": {
+      "Command": {
+        "binary": "qpdf",
+        "args": [
+          {
+            "template": "--split-pages",
+            "when": null
+          },
+          {
+            "template": "{input}",
+            "when": null
+          },
+          {
+            "template": "{output_dir}/page-%d.pdf",
+            "when": null
+          }
+        ],
+        "progress": "None",
+        "timeout": 300,
+        "success": "ExitZero",
+        "combine_inputs": false
+      }
+    }
+  },
+  {
     "id": "video.convert",
     "title": "Convert video",
     "keywords": [

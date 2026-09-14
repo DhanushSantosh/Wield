@@ -189,7 +189,11 @@ async fn ffmpeg_duration_parser_reports_percent_from_real_captured_output() {
     // -nostats` run during this feature's own design verification - not
     // synthesized, the real shape ffmpeg actually produces (including the
     // noise this parser must tolerate: the leftover `frame=  200 fps=0.0
-    // ... Lsize=...` summary line `-nostats` does NOT suppress).
+    // ... Lsize=...` summary line `-nostats` does NOT suppress). Also
+    // includes a leading `out_time_us=N/A` block - ffmpeg's first
+    // `-progress` report commonly arrives before it has computed real
+    // elapsed time; the parser must tolerate this without emitting a
+    // percent.
     let script = r#"#!/bin/sh
 cat <<'EOF' 1>&2
 ffmpeg version n9.0 Copyright (c) 2000-2026 the FFmpeg developers
@@ -197,6 +201,18 @@ Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'test-input.mp4':
   Duration: 00:00:08.00, start: 0.000000, bitrate: 47 kb/s
 Stream mapping:
   Stream #0:0 -> #0:0 (h264 (native) -> h264 (libx264))
+frame=1
+fps=0.00
+stream_0_0_q=0.0
+bitrate=N/A
+total_size=0
+out_time_us=N/A
+out_time_ms=N/A
+out_time=N/A
+dup_frames=0
+drop_frames=0
+speed=   0x
+progress=continue
 frame=98
 fps=0.00
 stream_0_0_q=28.0

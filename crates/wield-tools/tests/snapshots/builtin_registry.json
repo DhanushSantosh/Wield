@@ -543,6 +543,108 @@
     }
   },
   {
+    "id": "pdf.compress",
+    "title": "Compress PDF",
+    "keywords": [
+      "pdf",
+      "compress",
+      "shrink",
+      "ghostscript",
+      "size"
+    ],
+    "category": "Convert",
+    "args": [
+      {
+        "name": "input",
+        "label": "PDF",
+        "help": null,
+        "arg_type": {
+          "File": {
+            "filters": [
+              {
+                "label": "PDF",
+                "extensions": [
+                  "pdf"
+                ]
+              }
+            ],
+            "multiple": false
+          }
+        },
+        "default": null,
+        "required": true,
+        "when": null
+      },
+      {
+        "name": "quality",
+        "label": "Quality",
+        "help": "screen: smallest, lowest quality. ebook: balanced. printer: largest, best quality.",
+        "arg_type": {
+          "Enum": {
+            "options": [
+              "screen",
+              "ebook",
+              "printer"
+            ]
+          }
+        },
+        "default": {
+          "Str": "ebook"
+        },
+        "required": true,
+        "when": null
+      }
+    ],
+    "requires": {
+      "Binary": "gs"
+    },
+    "output": {
+      "File": {
+        "name": "{input_stem}-compressed.pdf",
+        "dir": "SameAsInput"
+      }
+    },
+    "capability": {
+      "Command": {
+        "binary": "gs",
+        "args": [
+          {
+            "template": "-sDEVICE=pdfwrite",
+            "when": null
+          },
+          {
+            "template": "-dCompatibilityLevel=1.4",
+            "when": null
+          },
+          {
+            "template": "-dPDFSETTINGS=/{quality}",
+            "when": null
+          },
+          {
+            "template": "-dNOPAUSE",
+            "when": null
+          },
+          {
+            "template": "-dBATCH",
+            "when": null
+          },
+          {
+            "template": "-sOutputFile={output}",
+            "when": null
+          },
+          {
+            "template": "{input}",
+            "when": null
+          }
+        ],
+        "progress": "None",
+        "timeout": 300,
+        "success": "ExitZero",
+        "combine_inputs": false
+      }
+    }
+  },
+  {
     "id": "video.convert",
     "title": "Convert video",
     "keywords": [

@@ -243,6 +243,31 @@ fn document_convert_renders_the_pdf_wrapper_branch() {
 }
 
 #[test]
+fn pdf_compress_renders_the_ghostscript_argv() {
+    let tool = builtin_registry().get("pdf.compress").unwrap().clone();
+    let Capability::Command(spec) = &tool.capability else {
+        panic!("expected Command");
+    };
+
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path("/docs/a.pdf".into()));
+    args.insert("quality".to_string(), ArgValue::Str("printer".into()));
+    let out = std::path::PathBuf::from("/docs/a-compressed.pdf");
+    assert_eq!(
+        render_argv(&spec.args, &args, Some(&out)).unwrap(),
+        vec![
+            "-sDEVICE=pdfwrite".to_string(),
+            "-dCompatibilityLevel=1.4".into(),
+            "-dPDFSETTINGS=/printer".into(),
+            "-dNOPAUSE".into(),
+            "-dBATCH".into(),
+            "-sOutputFile=/docs/a-compressed.pdf".into(),
+            "/docs/a.pdf".into(),
+        ],
+    );
+}
+
+#[test]
 fn registry_has_exactly_the_expected_builtins() {
     let ids: Vec<_> = builtin_registry()
         .list()
@@ -256,6 +281,7 @@ fn registry_has_exactly_the_expected_builtins() {
             "color.pick",
             "document.convert",
             "image.convert",
+            "pdf.compress",
             "video.convert"
         ]
     );

@@ -230,6 +230,7 @@ mod tests {
                 "color.pick",
                 "document.convert",
                 "image.convert",
+                "pdf.compress",
                 "video.convert"
             ]
         );

@@ -32,6 +32,7 @@ fn cmd_tool(id: &str, binary: &str, keywords: &[&str]) -> Descriptor {
             progress: ProgressSpec::None,
             timeout: Duration::from_secs(5),
             success: SuccessSpec::ExitZero,
+            combine_inputs: false,
         }),
     }
 }

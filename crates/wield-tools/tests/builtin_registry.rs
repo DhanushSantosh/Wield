@@ -243,6 +243,85 @@ fn document_convert_renders_the_pdf_wrapper_branch() {
 }
 
 #[test]
+fn pdf_compress_renders_the_ghostscript_argv() {
+    let tool = builtin_registry().get("pdf.compress").unwrap().clone();
+    let Capability::Command(spec) = &tool.capability else {
+        panic!("expected Command");
+    };
+
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path("/docs/a.pdf".into()));
+    args.insert("quality".to_string(), ArgValue::Str("printer".into()));
+    let out = std::path::PathBuf::from("/docs/a-compressed.pdf");
+    assert_eq!(
+        render_argv(&spec.args, &args, Some(&out)).unwrap(),
+        vec![
+            "-sDEVICE=pdfwrite".to_string(),
+            "-dCompatibilityLevel=1.4".into(),
+            "-dPDFSETTINGS=/printer".into(),
+            "-dNOPAUSE".into(),
+            "-dBATCH".into(),
+            "-sOutputFile=/docs/a-compressed.pdf".into(),
+            "/docs/a.pdf".into(),
+        ],
+    );
+}
+
+#[test]
+fn pdf_merge_spreads_every_selected_file_before_the_separator() {
+    let tool = builtin_registry().get("pdf.merge").unwrap().clone();
+    let Capability::Command(spec) = &tool.capability else {
+        panic!("expected Command");
+    };
+
+    let mut args = BTreeMap::new();
+    args.insert(
+        "input".to_string(),
+        ArgValue::Paths(vec![
+            "/docs/a.pdf".into(),
+            "/docs/b.pdf".into(),
+            "/docs/c.pdf".into(),
+        ]),
+    );
+    let out = std::path::PathBuf::from("/docs/a-merged.pdf");
+    assert_eq!(
+        render_argv(&spec.args, &args, Some(&out)).unwrap(),
+        vec![
+            "--empty".to_string(),
+            "--pages".into(),
+            "/docs/a.pdf".into(),
+            "/docs/b.pdf".into(),
+            "/docs/c.pdf".into(),
+            "--".into(),
+            "/docs/a-merged.pdf".into(),
+        ],
+    );
+}
+
+#[test]
+fn pdf_split_renders_the_output_dir_pattern() {
+    let tool = builtin_registry().get("pdf.split").unwrap().clone();
+    let Capability::Command(spec) = &tool.capability else {
+        panic!("expected Command");
+    };
+
+    let mut args = BTreeMap::new();
+    args.insert(
+        "input".to_string(),
+        ArgValue::Path("/docs/report.pdf".into()),
+    );
+    let scratch = std::path::PathBuf::from("/tmp/.wield-tmp-xyz-split");
+    assert_eq!(
+        render_argv(&spec.args, &args, Some(&scratch)).unwrap(),
+        vec![
+            "--split-pages".to_string(),
+            "/docs/report.pdf".into(),
+            "/tmp/.wield-tmp-xyz-split/page-%d.pdf".into(),
+        ],
+    );
+}
+
+#[test]
 fn registry_has_exactly_the_expected_builtins() {
     let ids: Vec<_> = builtin_registry()
         .list()
@@ -256,6 +335,9 @@ fn registry_has_exactly_the_expected_builtins() {
             "color.pick",
             "document.convert",
             "image.convert",
+            "pdf.compress",
+            "pdf.merge",
+            "pdf.split",
             "video.convert"
         ]
     );

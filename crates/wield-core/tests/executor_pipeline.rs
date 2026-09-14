@@ -72,8 +72,21 @@ fn convert_descriptor(binary: &str) -> Descriptor {
             progress: ProgressSpec::None,
             timeout: Duration::from_secs(5),
             success: SuccessSpec::ExitZero,
+            combine_inputs: false,
         }),
     }
+}
+
+fn split_descriptor(binary: &str) -> Descriptor {
+    let mut descriptor = convert_descriptor(binary);
+    descriptor.output = OutputSpec::Directory {
+        name: "{input_stem}".into(),
+        dir: OutputDir::SameAsInput,
+    };
+    if let Capability::Command(command) = &mut descriptor.capability {
+        command.args = vec!["{output_dir}".into()];
+    }
+    descriptor
 }
 
 fn portal_descriptor(adapter: &str) -> Descriptor {
@@ -117,6 +130,98 @@ async fn runs_a_command_tool_end_to_end() {
         }
         other => panic!("expected File, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn split_discovers_and_renames_every_produced_file() {
+    let dir = tempfile::tempdir().unwrap();
+    support::write_stub_script(
+        dir.path(),
+        "split-stub",
+        "#!/bin/sh\nmkdir -p \"$1\"\necho a > \"$1/x1\"\necho b > \"$1/x2\"\n",
+    );
+    let input = dir.path().join("report.raw");
+    std::fs::write(&input, b"whatever").unwrap();
+
+    let descriptor = split_descriptor("split-stub");
+    let executor = Executor::new(BinaryResolver::with_dirs(vec![dir.path().to_path_buf()]));
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path(input));
+    let (tx, _rx) = mpsc::channel(16);
+    let outcome = executor
+        .run(
+            ExecutionRequest { descriptor, args },
+            tx,
+            CancellationToken::new(),
+        )
+        .await;
+
+    match outcome {
+        ToolOutcome::Report { title, lines } => {
+            assert_eq!(title, "Split into 2 files");
+            assert_eq!(lines.len(), 2);
+        }
+        other => panic!("expected Report, got {other:?}"),
+    }
+    assert_eq!(
+        std::fs::read(dir.path().join("report-1.pdf")).unwrap(),
+        b"a\n"
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("report-2.pdf")).unwrap(),
+        b"b\n"
+    );
+    // The scratch directory must not survive a successful run.
+    let leftover = std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .any(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".wield-tmp-")
+        });
+    assert!(!leftover, "scratch directory was not cleaned up");
+}
+
+#[tokio::test]
+async fn split_producing_zero_files_is_a_failure_not_an_empty_report() {
+    let dir = tempfile::tempdir().unwrap();
+    support::write_stub_script(
+        dir.path(),
+        "empty-split-stub",
+        "#!/bin/sh\nmkdir -p \"$1\"\n",
+    );
+    let input = dir.path().join("report.raw");
+    std::fs::write(&input, b"whatever").unwrap();
+
+    let descriptor = split_descriptor("empty-split-stub");
+    let executor = Executor::new(BinaryResolver::with_dirs(vec![dir.path().to_path_buf()]));
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path(input));
+    let (tx, _rx) = mpsc::channel(16);
+    let outcome = executor
+        .run(
+            ExecutionRequest { descriptor, args },
+            tx,
+            CancellationToken::new(),
+        )
+        .await;
+
+    assert!(
+        matches!(outcome, ToolOutcome::Failed { .. }),
+        "expected Failed, got {outcome:?}"
+    );
+    let leftover = std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .any(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".wield-tmp-")
+        });
+    assert!(!leftover, "scratch directory was not cleaned up");
 }
 
 #[tokio::test]

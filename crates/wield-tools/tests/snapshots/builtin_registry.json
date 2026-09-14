@@ -244,7 +244,8 @@
         ],
         "progress": "FfmpegDuration",
         "timeout": 300,
-        "success": "ExitZero"
+        "success": "ExitZero",
+        "combine_inputs": false
       }
     }
   },
@@ -378,7 +379,8 @@
         ],
         "progress": "None",
         "timeout": 300,
-        "success": "ExitZero"
+        "success": "ExitZero",
+        "combine_inputs": false
       }
     }
   },
@@ -535,7 +537,252 @@
         ],
         "progress": "None",
         "timeout": 120,
-        "success": "ExitZero"
+        "success": "ExitZero",
+        "combine_inputs": false
+      }
+    }
+  },
+  {
+    "id": "pdf.compress",
+    "title": "Compress PDF",
+    "keywords": [
+      "pdf",
+      "compress",
+      "shrink",
+      "ghostscript",
+      "size"
+    ],
+    "category": "Convert",
+    "args": [
+      {
+        "name": "input",
+        "label": "PDF",
+        "help": null,
+        "arg_type": {
+          "File": {
+            "filters": [
+              {
+                "label": "PDF",
+                "extensions": [
+                  "pdf"
+                ]
+              }
+            ],
+            "multiple": false
+          }
+        },
+        "default": null,
+        "required": true,
+        "when": null
+      },
+      {
+        "name": "quality",
+        "label": "Quality",
+        "help": "screen: smallest, lowest quality. ebook: balanced. printer: largest, best quality.",
+        "arg_type": {
+          "Enum": {
+            "options": [
+              "screen",
+              "ebook",
+              "printer"
+            ]
+          }
+        },
+        "default": {
+          "Str": "ebook"
+        },
+        "required": true,
+        "when": null
+      }
+    ],
+    "requires": {
+      "Binary": "gs"
+    },
+    "output": {
+      "File": {
+        "name": "{input_stem}-compressed.pdf",
+        "dir": "SameAsInput"
+      }
+    },
+    "capability": {
+      "Command": {
+        "binary": "gs",
+        "args": [
+          {
+            "template": "-sDEVICE=pdfwrite",
+            "when": null
+          },
+          {
+            "template": "-dCompatibilityLevel=1.4",
+            "when": null
+          },
+          {
+            "template": "-dPDFSETTINGS=/{quality}",
+            "when": null
+          },
+          {
+            "template": "-dNOPAUSE",
+            "when": null
+          },
+          {
+            "template": "-dBATCH",
+            "when": null
+          },
+          {
+            "template": "-sOutputFile={output}",
+            "when": null
+          },
+          {
+            "template": "{input}",
+            "when": null
+          }
+        ],
+        "progress": "None",
+        "timeout": 300,
+        "success": "ExitZero",
+        "combine_inputs": false
+      }
+    }
+  },
+  {
+    "id": "pdf.merge",
+    "title": "Merge PDFs",
+    "keywords": [
+      "pdf",
+      "merge",
+      "combine",
+      "join",
+      "qpdf"
+    ],
+    "category": "Convert",
+    "args": [
+      {
+        "name": "input",
+        "label": "PDFs",
+        "help": null,
+        "arg_type": {
+          "File": {
+            "filters": [
+              {
+                "label": "PDF",
+                "extensions": [
+                  "pdf"
+                ]
+              }
+            ],
+            "multiple": true
+          }
+        },
+        "default": null,
+        "required": true,
+        "when": null
+      }
+    ],
+    "requires": {
+      "Binary": "qpdf"
+    },
+    "output": {
+      "File": {
+        "name": "{input_stem}-merged.pdf",
+        "dir": "SameAsInput"
+      }
+    },
+    "capability": {
+      "Command": {
+        "binary": "qpdf",
+        "args": [
+          {
+            "template": "--empty",
+            "when": null
+          },
+          {
+            "template": "--pages",
+            "when": null
+          },
+          {
+            "template": "{input}",
+            "when": null
+          },
+          {
+            "template": "--",
+            "when": null
+          },
+          {
+            "template": "{output}",
+            "when": null
+          }
+        ],
+        "progress": "None",
+        "timeout": 300,
+        "success": "ExitZero",
+        "combine_inputs": true
+      }
+    }
+  },
+  {
+    "id": "pdf.split",
+    "title": "Split PDF",
+    "keywords": [
+      "pdf",
+      "split",
+      "pages",
+      "extract",
+      "qpdf"
+    ],
+    "category": "Convert",
+    "args": [
+      {
+        "name": "input",
+        "label": "PDF",
+        "help": null,
+        "arg_type": {
+          "File": {
+            "filters": [
+              {
+                "label": "PDF",
+                "extensions": [
+                  "pdf"
+                ]
+              }
+            ],
+            "multiple": false
+          }
+        },
+        "default": null,
+        "required": true,
+        "when": null
+      }
+    ],
+    "requires": {
+      "Binary": "qpdf"
+    },
+    "output": {
+      "Directory": {
+        "name": "{input_stem}",
+        "dir": "SameAsInput"
+      }
+    },
+    "capability": {
+      "Command": {
+        "binary": "qpdf",
+        "args": [
+          {
+            "template": "--split-pages",
+            "when": null
+          },
+          {
+            "template": "{input}",
+            "when": null
+          },
+          {
+            "template": "{output_dir}/page-%d.pdf",
+            "when": null
+          }
+        ],
+        "progress": "None",
+        "timeout": 300,
+        "success": "ExitZero",
+        "combine_inputs": false
       }
     }
   },
@@ -760,7 +1007,8 @@
         ],
         "progress": "FfmpegDuration",
         "timeout": 1800,
-        "success": "ExitZero"
+        "success": "ExitZero",
+        "combine_inputs": false
       }
     }
   }

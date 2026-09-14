@@ -31,6 +31,7 @@ fn base_command_descriptor() -> Descriptor {
             progress: ProgressSpec::None,
             timeout: Duration::from_secs(60),
             success: SuccessSpec::ExitZero,
+            combine_inputs: false,
         }),
     }
 }
@@ -63,6 +64,19 @@ fn rejects_two_multi_file_args() {
 #[test]
 fn accepts_a_well_formed_descriptor() {
     assert!(validate_descriptor(&base_command_descriptor()).is_ok());
+}
+
+#[test]
+fn accepts_a_directory_output_descriptor() {
+    let mut descriptor = base_command_descriptor();
+    descriptor.output = OutputSpec::Directory {
+        name: "{input_stem}".into(),
+        dir: OutputDir::SameAsInput,
+    };
+    if let Capability::Command(command) = &mut descriptor.capability {
+        command.args = vec!["{input}".into(), "{output_dir}".into()];
+    }
+    assert!(validate_descriptor(&descriptor).is_ok());
 }
 
 #[test]

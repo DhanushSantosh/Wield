@@ -132,7 +132,22 @@ pub enum Requires {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum OutputSpec {
     Value(ValueKind),
-    File { name: String, dir: OutputDir },
+    File {
+        name: String,
+        dir: OutputDir,
+    },
+    /// The command is given a fresh, empty scratch directory (via the
+    /// `{output_dir}` template placeholder) instead of one exact output
+    /// path, because the real number of files it produces isn't known
+    /// until it actually runs (e.g. splitting a PDF into its pages).
+    /// `name` is a template (resolved the same way `File.name` is) for
+    /// the *prefix* each discovered file's final name is built from -
+    /// the actual per-file numbering is `Executor::run_split`'s own
+    /// concern, not a template placeholder.
+    Directory {
+        name: String,
+        dir: OutputDir,
+    },
     Report,
 }
 
@@ -167,6 +182,7 @@ pub struct CommandSpec {
     #[serde(with = "duration_secs")]
     pub timeout: Duration,
     pub success: SuccessSpec,
+    pub combine_inputs: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

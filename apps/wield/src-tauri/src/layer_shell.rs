@@ -8,15 +8,6 @@
 
 use gtk_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
-/// Distance in logical pixels from the top of the usable area (below any
-/// reserved bars/docks — gtk-layer-shell margins already account for those)
-/// to the palette's top edge. Keeps it near the top like Spotlight/Raycast
-/// rather than dead-center, and — because only the top edge is anchored —
-/// keeps that top edge fixed while the window's height animates, so
-/// resizing shrinks/grows the bottom edge instead of shifting the whole
-/// window up and down on every keystroke the way vertical centering would.
-pub const PALETTE_TOP_MARGIN_PX: i32 = 140;
-
 /// Returns whether the current session advertises `wlr-layer-shell`.
 ///
 /// This is false on X11, GNOME, unsupported Wayland compositors, and when no
@@ -29,16 +20,11 @@ pub fn is_available() -> bool {
     gtk_layer_shell::is_supported()
 }
 
-/// Configures a not-yet-realized GTK window as an overlay surface.
-///
-/// Layer-shell surfaces are centered by default when no edges are anchored.
-/// Anchoring opposite edges would stretch the window and make GTK ignore its
-/// requested size, so `top_margin_px` anchors only the top edge — left and
-/// right stay unanchored, so the window is still horizontally centered, but
-/// vertical placement follows the margin from the top of the usable area
-/// (below any reserved bars/docks) instead of being vertically centered.
-/// Pass `None` for a fully centered surface (used for Preferences, which
-/// isn't a launcher and has no reason to sit near the top).
+/// Configures a not-yet-realized GTK window as a full-output overlay
+/// surface. The surface itself covers the whole output; the small visible
+/// "card" is positioned and sized entirely by CSS against an otherwise
+/// transparent, full-screen backdrop (see `styles.css`'s `.palette-backdrop`
+/// / `.app-shell`, and `App.tsx`'s backdrop click handler).
 ///
 /// `namespace` is set explicitly rather than left at gtk-layer-shell's
 /// default (which is literally the string `"gtk-layer-shell"`) because a
@@ -53,7 +39,7 @@ pub fn is_available() -> bool {
 /// means Wield only ever renders exactly what it asks for unless a user
 /// deliberately writes a rule matching it.
 ///
-/// ## Keyboard mode: `Exclusive`, with a known, accepted tradeoff
+/// ## Keyboard mode: `Exclusive`, and why the surface is full-output
 ///
 /// Neither of gtk-layer-shell's other keyboard modes works cleanly here
 /// (verified with `wtype`/`ydotool` synthetic input against a live
@@ -71,26 +57,26 @@ pub fn is_available() -> bool {
 ///   — Escape-to-hide and the blur-to-hide listener both never fired
 ///   because the surface never held focus to lose in the first place.
 /// - `Exclusive` does grant keyboard focus reliably (Escape-to-hide is
-///   confirmed working) — but appears to also prevent *other* windows
-///   from receiving focus (confirmed: `hyprctl activewindow` stayed on
-///   the previously-focused app even after showing the palette, and a
-///   real click on another window while the palette was open did not
-///   register at all). This is effectively modal behavior while the
-///   palette is visible — acceptable for how briefly it's shown, but a
-///   real, deliberate tradeoff, not an oversight: it means click-away-to-
-///   dismiss does not work; Escape (or the tray) are the ways to close
-///   it. Revisit if Hyprland's on-demand handling improves, or if a
-///   different mechanism (Wield detecting an outside click itself,
-///   rather than relying on the compositor's normal focus handoff) turns
-///   out to be worth the extra complexity.
-pub fn configure(window: &gtk::ApplicationWindow, top_margin_px: Option<i32>, namespace: &str) {
+///   confirmed working), but on this Hyprland version it also means the
+///   surface holding it is the *only* one that ever receives pointer
+///   button events — a click that would otherwise land on any other
+///   surface (another app's window, or a second Wield-owned surface) is
+///   silently dropped, not delivered anywhere. This is a real, confirmed
+///   Hyprland bug, not a Wield gap: <https://github.com/hyprwm/Hyprland/discussions/14136>.
+///   A separate "click-catcher" surface was tried first and rejected for
+///   exactly this reason — see `docs/testing.md` for the full
+///   investigation. Anchoring THIS surface (the palette's own) to all
+///   four edges instead means every click on the output lands on it,
+///   sidestepping the bug entirely rather than working around it: the
+///   webview's own JS distinguishes "landed on the card" from "landed on
+///   the transparent backdrop" and dismisses on the latter.
+pub fn configure(window: &gtk::ApplicationWindow, namespace: &str) {
     window.init_layer_shell();
     window.set_namespace(namespace);
     window.set_layer(Layer::Overlay);
     window.set_keyboard_mode(KeyboardMode::Exclusive);
-    if let Some(margin) = top_margin_px {
-        window.set_anchor(Edge::Top, true);
-        window.set_layer_shell_margin(Edge::Top, margin);
+    for edge in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {
+        window.set_anchor(edge, true);
     }
 }
 

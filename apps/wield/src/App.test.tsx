@@ -7,7 +7,6 @@ const listToolsMock = vi.fn();
 const runToolMock = vi.fn();
 const cancelRunMock = vi.fn();
 const hidePaletteMock = vi.fn();
-const resizePaletteMock = vi.fn();
 const hotkeyStatusMock = vi.fn();
 const capabilitiesMock = vi.fn();
 let selectToolHandler: ((toolId: string) => void) | undefined;
@@ -21,7 +20,6 @@ vi.mock("./lib/wield", async (importOriginal) => {
     runTool: (...args: unknown[]) => runToolMock(...args),
     cancelRun: (...args: unknown[]) => cancelRunMock(...args),
     hidePalette: (...args: unknown[]) => hidePaletteMock(...args),
-    resizePalette: (...args: unknown[]) => resizePaletteMock(...args),
     hotkeyStatus: () => hotkeyStatusMock(),
     capabilities: () => capabilitiesMock(),
     onSelectTool: async (handler: (toolId: string) => void) => {
@@ -120,7 +118,6 @@ beforeEach(() => {
   runToolMock.mockReset();
   cancelRunMock.mockReset().mockResolvedValue(true);
   hidePaletteMock.mockReset().mockResolvedValue(undefined);
-  resizePaletteMock.mockReset().mockResolvedValue(undefined);
   hotkeyStatusMock.mockReset().mockResolvedValue({ state: "Registered" });
   capabilitiesMock.mockReset().mockResolvedValue({ binaries: {}, portals: {}, tools: [] });
   resizeObserverCallback = undefined;
@@ -322,14 +319,30 @@ test("a tray tool-selection event for an unavailable tool does nothing", async (
   expect(screen.getByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
 });
 
-test("reports the shell's rendered height to resizePalette whenever it changes", async () => {
+test("the card's measured content height drives its own CSS height", async () => {
   render(<App />);
   await screen.findByText("Pick a color");
   expect(resizeObserverCallback).toBeDefined();
 
   const fakeEntry = { contentRect: { height: 246 } } as ResizeObserverEntry;
   act(() => resizeObserverCallback?.([fakeEntry], {} as ResizeObserver));
-  expect(resizePaletteMock).toHaveBeenCalledWith(246);
+
+  const card = document.querySelector(".app-shell") as HTMLElement;
+  expect(card.style.height).toBe("246px");
+});
+
+test("clicking the backdrop outside the card hides the palette", async () => {
+  render(<App />);
+  await screen.findByText("Pick a color");
+  const backdrop = document.querySelector(".palette-backdrop") as HTMLElement;
+  fireEvent.mouseDown(backdrop);
+  expect(hidePaletteMock).toHaveBeenCalledTimes(1);
+});
+
+test("clicking inside the card does not hide the palette", async () => {
+  render(<App />);
+  await userEvent.click(await screen.findByRole("searchbox", { name: "Search tools" }));
+  expect(hidePaletteMock).not.toHaveBeenCalled();
 });
 
 test("the settings gear opens settings, and its close button returns to search", async () => {

@@ -10,7 +10,6 @@ import {
   listTools,
   onOpenSettings,
   onSelectTool,
-  resizePalette,
   runTool,
   type CapabilitiesReport,
   type HotkeyState,
@@ -215,7 +214,8 @@ function recentTools(tools: ToolSummary[]): ToolSummary[] {
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const attemptRef = useRef(0);
-  const shellRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [cardHeight, setCardHeight] = useState<number | undefined>(undefined);
   const [hotkey, setHotkey] = useState<HotkeyState | null>(null);
   const [report, setReport] = useState<CapabilitiesReport | null>(null);
 
@@ -230,16 +230,22 @@ export default function App() {
     void capabilities().then(setReport);
   }, []);
 
-  // Width is fixed; height follows the shell's actual rendered content —
+  // Width is fixed; height follows the card's actual rendered content —
   // search results, an arg form, progress, or a result card each have a
-  // different natural height, so the window shouldn't be one rigid box
-  // regardless of what's showing.
+  // different natural height. The palette's own OS window is always
+  // full-screen now (see layer_shell::configure) so there's no window to
+  // resize any more; only the visible card animates, entirely via CSS
+  // (`.app-shell`'s `transition: height`) driven by this measured value.
+  // The observer watches the INNER content wrapper (its natural,
+  // unconstrained height) rather than `.app-shell` itself, which now has
+  // its height explicitly set below - observing the same element you're
+  // setting would just re-trigger on your own write.
   useEffect(() => {
-    const element = shellRef.current;
+    const element = contentRef.current;
     if (element === null) return;
     const observer = new ResizeObserver((entries) => {
       const height = entries[0]?.contentRect.height;
-      if (height !== undefined) void resizePalette(height);
+      if (height !== undefined) setCardHeight(height);
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -411,8 +417,29 @@ export default function App() {
   }
 
   return (
-    <main ref={shellRef} className="app-shell">
-      {content}
-    </main>
+    <div
+      className="palette-backdrop"
+      onMouseDown={(event) => {
+        // Only a genuine click on the backdrop itself - not one bubbled up
+        // from a child, e.g. a result row - counts as "outside the card".
+        // This replaces a separate click-catcher surface: Hyprland never
+        // delivers a pointer event to any surface other than the one
+        // holding KeyboardMode::Exclusive (hyprwm/Hyprland#14136), so a
+        // second surface can never see an outside click. The palette's own
+        // surface now covers the whole output instead (see
+        // layer_shell::configure), so every click - wherever it lands -
+        // reaches this same webview, and ordinary DOM hit-testing (already
+        // proven reliable: this is exactly how clicking a result row
+        // already worked) tells this handler whether it landed on the
+        // backdrop or bubbled up from the card.
+        if (event.target === event.currentTarget) void hidePalette();
+      }}
+    >
+      <main className="app-shell" style={{ height: cardHeight }}>
+        <div ref={contentRef} className="app-shell-content">
+          {content}
+        </div>
+      </main>
+    </div>
   );
 }

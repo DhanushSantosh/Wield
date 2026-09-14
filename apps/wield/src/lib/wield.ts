@@ -110,11 +110,6 @@ export async function showPalette(): Promise<void> {
   return invoke<void>("show_palette");
 }
 
-/** Smoothly resizes the palette window's height to `height` (logical pixels). */
-export async function resizePalette(height: number): Promise<void> {
-  return invoke<void>("resize_palette", { height });
-}
-
 // HotkeyState is internally tagged (#[serde(tag = "state")]) on the Rust
 // side — unlike every other enum here, which is externally tagged.
 export type HotkeyState =

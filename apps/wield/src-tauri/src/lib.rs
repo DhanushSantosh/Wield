@@ -154,7 +154,6 @@ pub fn run() {
             commands::hide_palette,
             commands::hotkey_status,
             commands::configure_hotkey,
-            commands::resize_palette,
             commands::quit
         ])
         .setup(move |app| {
@@ -178,11 +177,7 @@ pub fn run() {
                         // A distinct namespace, not the library default - see
                         // layer_shell::configure's own doc comment for why.
                         let namespace = format!("wield-{}", palette::LABEL);
-                        layer_shell::configure(
-                            &window,
-                            Some(layer_shell::PALETTE_TOP_MARGIN_PX),
-                            &namespace,
-                        );
+                        layer_shell::configure(&window, &namespace);
                         tracing::info!("layer-shell positioning enabled");
                     }
                     Err(error) => {

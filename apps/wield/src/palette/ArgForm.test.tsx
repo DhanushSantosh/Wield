@@ -76,3 +76,45 @@ test("initialValues pre-fills the form for Run again", () => {
   );
   expect(screen.getByDisplayValue("hello")).toBeInTheDocument();
 });
+
+test("hiding a field via its when-gate excludes its value from submit, even if it was set while visible", async () => {
+  const tool: ToolSummary = {
+    id: "audio.extract",
+    title: "Extract audio",
+    keywords: [],
+    category: "Convert",
+    available: true,
+    reason: null,
+    args: [
+      {
+        name: "format",
+        label: "Output format",
+        help: null,
+        arg_type: { Enum: { options: ["mp3", "flac"] } },
+        default: { Str: "mp3" },
+        required: true,
+        when: null,
+      },
+      {
+        name: "quality",
+        label: "Bitrate",
+        help: null,
+        arg_type: { Enum: { options: ["192k", "320k"] } },
+        default: null,
+        required: false,
+        when: { arg: "format", in: [{ Str: "mp3" }] },
+      },
+    ],
+  };
+  const onSubmit = vi.fn();
+  render(<ArgForm tool={tool} initialValues={{}} onSubmit={onSubmit} onEscape={vi.fn()} />);
+  // quality is visible while format=mp3 (the default) - set it.
+  await userEvent.selectOptions(screen.getByLabelText("Bitrate"), "320k");
+  // Switching format to flac hides quality's field. Its value stays in
+  // React state (ArgForm never clears it on a visibility change) - this
+  // is exactly the scenario the fix must handle at submit time.
+  await userEvent.selectOptions(screen.getByLabelText("Output format"), "flac");
+  expect(screen.queryByLabelText("Bitrate")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Extract audio" }));
+  expect(onSubmit).toHaveBeenCalledWith({ format: "flac" });
+});

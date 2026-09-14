@@ -33,29 +33,44 @@ body {
   font-size: 14px;
 }
 
+/*
+ * The palette's OS window is a full-output layer-shell surface (see
+ * layer_shell::configure) - not because the palette needs the whole
+ * screen, but because Hyprland only ever delivers pointer events to
+ * whichever surface holds KeyboardMode::Exclusive (a confirmed compositor
+ * bug: hyprwm/Hyprland#14136), so the palette's own surface has to cover
+ * everything for a click anywhere to reach *any* of Wield's own code.
+ * This backdrop is that surface's actual content: fully transparent,
+ * filling the viewport, with the visible card positioned inside it by
+ * ordinary flex layout. A `mousedown` here (not bubbled from the card)
+ * dismisses the palette - see App.tsx.
+ */
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  /* Distance from the top of the screen to the card - keeps it near the
+     top like Spotlight/Raycast rather than dead-center. Previously a
+     gtk-layer-shell margin on the OS window itself; now plain CSS, since
+     the window is full-screen and no longer positioned by the compositor
+     at all. */
+  padding-top: 140px;
+}
+
 .app-shell {
   background: var(--bg);
   border-radius: 15px;
-  /* A tighter falloff than before (was 0 20px 50px) - that needed ~40px
-     of clearance on every side to avoid hard clipping, which is exactly
-     the width the window was shrunk to give it. Fully filling the
-     window's width instead needs a shadow that doesn't ask for room the
-     window no longer sets aside. */
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.55),
     0 0 0 1px var(--border);
-  /* A small margin, just past the corner radius itself, not the old
-     ~40px gap - a rounded corner needs *some* room past the window's own
-     edge to actually render as a smooth curve rather than a jagged,
-     badly-dithered cutout (confirmed live: at true 0 margin, even with
-     the window's `transparent` flag on, the corner rendered as a blocky
-     artifact, not the clean curve this same radius produces with room
-     to breathe). 20px is enough for the 15px radius with a few px to
-     spare, and reads as "rounded corner", not "empty space on the side". */
-  max-width: calc(100% - 40px);
-  margin: 0 auto;
+  width: 520px;
+  /* Room for the corner radius on very narrow screens - a rounded corner
+     needs *some* room past its own edge to render as a smooth curve
+     rather than a jagged, badly-dithered cutout. */
+  max-width: calc(100vw - 40px);
   overflow: hidden;
-  transition: max-height 160ms ease;
+  transition: height 180ms cubic-bezier(0.33, 1, 0.68, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {

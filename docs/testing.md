@@ -514,3 +514,139 @@ exports it. A local build succeeding proves nothing about a symbol's
 portability - only CI (or another machine) surfaces that gap. Prefer a
 runtime lookup over `extern "C"` for any symbol whose presence isn't
 guaranteed by the crate's own declared version.
+
+## Click-away-to-dismiss: a second surface didn't work, a full-screen one did
+
+On 2026-09-13/14, followed up on the "click-away-to-dismiss does not work"
+tradeoff documented above. Two designs were tried; the first failed for a
+reason worth recording in full, since it cost real implementation effort
+before the failure was understood.
+
+### First attempt: a separate "click-catcher" surface — built, reviewed, then found non-functional
+
+The first design (spec'd, planned, and implemented across five reviewed
+commits on `fix/click-catcher-design`) added a second, fully invisible,
+full-output `gtk::Window` behind the palette (`Layer::Top`,
+`KeyboardMode::None`) whose only job was to catch a click anywhere outside
+the palette's own small box and call `palette::hide()`. It compiled clean,
+passed every task review, and rendered correctly (`hyprctl layers` showed
+it mapped at the right geometry with `alpha: 1`).
+
+Live testing found it did not work at all: a realistic-timing `ydotool`
+click squarely within the catcher's own mapped bounds, clearly outside the
+palette, never dismissed the palette in either of two scenarios (the
+same-monitor previously-focused window; a different, previously-unfocused
+window on a different monitor). Root-caused with temporary
+`tracing::info!` diagnostics added to the catcher's own click handler,
+rebuilt, and reproduced live: **the handler's log line never printed** -
+the click never reached the catcher's surface at all, not a logic bug in
+what ran after.
+
+Ruled out first, to isolate the real cause: general Exclusive-mode pointer
+blocking wasn't it (a click landed squarely on the palette's own "Pick a
+colour" row and correctly activated the tool - confirmed via a fresh
+`org.freedesktop.portal.Request` proxy appearing in the log and the
+color-picker capture overlay appearing on screen); the synthetic-input
+mechanism itself wasn't it (baseline clicks with no Wield surface shown
+correctly changed `hyprctl activewindow`, both same-monitor and
+cross-monitor).
+
+Root cause, confirmed via an upstream search rather than guessed: Hyprland
+has an open, maintainer-unanswered bug report,
+[hyprwm/Hyprland#14136](https://github.com/hyprwm/Hyprland/discussions/14136),
+stating that a layer-shell surface holding `KeyboardMode::Exclusive`
+captures *all* pointer button events on this compositor - regardless of
+cursor position or the surface's own input region - unlike Sway and niri,
+which correctly let pointer events fall through to whatever the cursor is
+actually over. While the palette holds `Exclusive`, Hyprland was never
+doing real hit-testing against any other surface, including a second
+surface owned by the same process. No client-side configuration of a
+second surface (anchors, layer, input region) could have worked around
+this - the bug is in what the compositor delivers events *to*, not in
+anything a client requests.
+
+The whole click-catcher subsystem (`click_catcher.rs`, its `AppState`
+plumbing, and its wiring into `palette::show`/`hide`) was removed rather
+than left in place unused, once the pivot below replaced it.
+
+### Second attempt: make the palette's own surface full-screen — this is what shipped
+
+Since Hyprland only ever delivers pointer events to the surface holding
+`KeyboardMode::Exclusive`, the fix that follows directly from the root
+cause is to make *that* surface (the palette's own) cover the whole
+output, rather than adding a second one. `layer_shell::configure` now
+anchors the palette's `gtk::ApplicationWindow` to all four edges (full
+output) instead of just the top edge; the small visible "card" the user
+actually sees is positioned by CSS alone, as a child of a full-viewport,
+fully transparent `.palette-backdrop` (`App.tsx` / `styles.css`). A click
+anywhere on the output is now, structurally, a click on the palette's own
+surface - ordinary in-page DOM hit-testing (already proven reliable: this
+is exactly how clicking a result row already worked) decides whether it
+landed on the backdrop (dismiss) or bubbled up from the card (do nothing).
+
+This also retired the palette's Rust-driven window-resize animation
+(`animate_to_height`/`resize_steps`, the `resize_palette` command): with
+the OS window now permanently full-screen, there is no window left to
+resize - gtk-layer-shell ignores requested sizes on a surface anchored to
+all four edges by design, matching `layer_shell::configure`'s own
+long-standing warning about this for the opposite case. The card's height
+now animates with a plain CSS `transition: height`, driven by a
+`ResizeObserver` on an inner content wrapper (not on the card element
+itself, to avoid observing your own write) rather than an IPC round trip
+per resize step.
+
+**Verified live** (fresh build installed to `~/.local/bin/wield-app`,
+`hyprctl layers -j` / `hyprctl activewindow -j` / `grim` / `ydotool` with
+realistic per-key and per-click timing throughout):
+
+- `hyprctl layers` shows a single `wield-palette` surface covering the
+  full output (minus a ~45px strip at the top reserved by this desktop's
+  own status bar's exclusive zone - harmless, well clear of where the
+  card renders), `alpha: 1`.
+- Clicking the real, previously-focused window underneath (tested against
+  a real running app, not a disposable test window) correctly dismissed
+  the palette - the exact case the original bug report described
+  ("i couldnt register a click at all couldnt even click the main
+  foreground window") and the case the click-catcher failed to fix.
+- Clicking inside the card does not dismiss it, and normal interaction
+  keeps working: a click on a result row activates it (confirmed via the
+  color-picker capture), and typing into the search box filters results
+  live while the palette stays mapped.
+- Escape still hides the palette (or backs out one view level first, e.g.
+  result → search), unaffected by any of the above.
+- A 5-run fresh-launch stress test (kill, relaunch, show, check `alpha`)
+  came back `alpha: 1` every time - `force_commit` is working for the
+  full-screen surface exactly as reliably as it did for the smaller one.
+
+**Known gap, found while testing this, not introduced by this change:**
+clicking a genuinely different, unfocused monitor does *not* dismiss the
+palette either, confirmed against two different real target windows
+(ChatGPT and, separately, the Claude desktop app). This directly
+contradicts an earlier note in this document (above) that claimed the
+cross-monitor case "worked" via the existing blur listener - given what
+#14136 actually says (Hyprland drops pointer events to *every* surface but
+the Exclusive one, full stop, not just "other surfaces on the same
+output"), that earlier finding was almost certainly a stale or
+mistimed test predating this investigation, not a real, still-true
+behavior. Closing this gap completely would mean creating a full-screen
+backdrop surface *per connected output* (wlr-layer-shell ties one layer
+surface to at most one `wl_output`), each independently forwarding a
+dismiss - real, non-trivial added complexity (per-output surface
+lifecycle, monitor hotplug) for a materially rarer interaction than the
+same-monitor case this fix directly targets. Left as a documented
+limitation rather than chased further: Escape or the tray remain the
+reliable way to dismiss when the palette is shown on a monitor other than
+the one you want to click.
+
+**Rare timing hazard, observed once, not reproduced on demand:** a single
+early test that clicked the search box and then immediately sent three
+keystrokes with no delay ended up with the palette dismissed and the
+typed text landing in a completely different application's own input box.
+Every later, more deliberate repeat (click, confirm state, type one
+character at a time, confirm state after each) worked correctly with no
+issue. The likely explanation is a race with the pre-existing
+`window.addEventListener("blur", ...)` hide-on-blur listener (not the new
+backdrop-click code) rather than anything about this fix specifically -
+matches this project's existing "give synthetic input realistic timing,
+not instantaneous batches" lesson. Noted rather than chased further,
+since it did not reproduce under normal interaction timing.

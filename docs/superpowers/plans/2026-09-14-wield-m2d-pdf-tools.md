@@ -415,7 +415,40 @@ Expected: PASS - both new tests, plus every existing test in the crate
 (confirms Step 6's ripple fix was complete and Steps 3-5 didn't change
 behavior for any existing single-value case).
 
-- [ ] **Step 9: Full workspace gate**
+- [ ] **Step 9: Regenerate the `wield-tools` snapshot**
+
+**Found during execution, not anticipated when this plan was first
+written — recorded here as the correction, not left as a surprise.**
+`CommandSpec` derives `Serialize`; adding `combine_inputs` in Step 1
+changes the serialized shape of *every* existing tool that has a
+`Capability::Command` (`image.convert`, `video.convert`, `audio.extract`,
+`document.convert` - not `color.pick`, a `Portal` capability), even
+though this task never touches `wield-tools` source. The committed
+snapshot doesn't know about the new field yet, so
+`builtin_registry_matches_snapshot` fails the moment Step 10's full gate
+runs `cargo test --workspace` - this step exists so that failure doesn't
+happen. (The plan originally deferred all snapshot work to Task 3; that
+was a real inconsistency against this task's own "full gate green
+before commit" requirement, not something to route around by skipping
+the gate or committing without a passing test suite.)
+
+```bash
+UPDATE_SNAPSHOTS=1 cargo test -p wield-tools
+cargo test -p wield-tools
+```
+
+Review the diff:
+
+```bash
+git diff crates/wield-tools/tests/snapshots/builtin_registry.json
+```
+
+Expected: every existing `Command`-capability entry gains exactly one
+new line, `"combine_inputs": false`, inside its own `capability.Command`
+object - confirm that's the *only* change to each of those four entries,
+nothing else touched.
+
+- [ ] **Step 10: Full workspace gate**
 
 ```bash
 cargo fmt --all -- --check
@@ -424,7 +457,7 @@ cargo test --workspace -- --test-threads=1
 npm run check
 ```
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add crates/wield-core/src/descriptor.rs \
@@ -434,7 +467,8 @@ git add crates/wield-core/src/descriptor.rs \
   crates/wield-core/tests/descriptor_validation.rs \
   crates/wield-core/tests/descriptor_serde.rs \
   crates/wield-core/tests/executor_pipeline.rs \
-  crates/wield-core/tests/argv_rendering.rs
+  crates/wield-core/tests/argv_rendering.rs \
+  crates/wield-tools/tests/snapshots/builtin_registry.json
 git commit -m "feat(core): add combine_inputs mode — spread a Paths value across one argv placeholder
 
 New CommandSpec.combine_inputs flag; when true, a bare {name} placeholder
@@ -446,6 +480,10 @@ invocation, not N separate ones. Also extends input/input_stem/input_dir
 resolution to fall back to the first selected file when the arg holds a
 Paths value instead of a single Path, and prepares resolve()'s \"output\"
 case to also serve a new \"output_dir\" token (used by Task 2).
+
+Snapshot regenerated (combine_inputs now appears on every existing
+Command-capability tool) so the full workspace gate stays green on this
+commit, not just wield-core's own tests.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
@@ -1265,14 +1303,13 @@ cargo test -p wield-tools
 git diff crates/wield-tools/tests/snapshots/builtin_registry.json
 ```
 
-**This diff will NOT be a pure insertion this time** - Task 1 added
-`combine_inputs` to `CommandSpec`, so every existing `Command`-capability
-entry (`image.convert`, `video.convert`, `audio.extract`,
-`document.convert` - not `color.pick`, which is a `Portal` capability)
-gains exactly one new line, `"combine_inputs": false`, in its own
-`capability.Command` object. Confirm that's *all* that changed in each
-existing entry (no other field touched), alongside the new, larger
-`pdf.compress` object.
+Expected: a pure insertion of one new `pdf.compress` object - Task 1's
+own Step 9 already regenerated this snapshot to add `"combine_inputs": false`
+to every existing `Command`-capability entry, so that ripple is already
+settled by the time this task runs. Confirm every pre-existing entry
+(`image.convert`, `video.convert`, `audio.extract`, `document.convert`,
+and now their `combine_inputs` field too) is byte-for-byte unchanged in
+this diff - only the new `pdf.compress` object should appear.
 
 - [ ] **Step 6: Fix the mechanical ripple in the app crate**
 
@@ -1477,12 +1514,12 @@ cargo test -p wield-tools
 git diff crates/wield-tools/tests/snapshots/builtin_registry.json
 ```
 
-This time the diff should be closer to a pure insertion again (the
-`combine_inputs` field already exists in every entry from Task 3's
-snapshot regeneration) - confirm only the new `pdf.merge` object was
-added, and that its own `"combine_inputs": true` is present (this is the
-one entry where that field is genuinely `true`, not the default `false`
-every other tool has).
+Expected: a pure insertion (`combine_inputs` has been on every entry
+since Task 1's own snapshot regeneration, so there's no repeat of that
+ripple here) - confirm only the new `pdf.merge` object was added, and
+that its own `"combine_inputs": true` is present (this is the one entry
+where that field is genuinely `true`, not the default `false` every
+other tool has).
 
 - [ ] **Step 5: Fix the mechanical ripple**
 

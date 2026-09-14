@@ -816,3 +816,45 @@ verified, not falsely claimed as a complete synthetic pointer-driven run.
 The branch test process and its full-screen transparent palette backdrop were
 stopped after verification. The user's previously running installed Wield
 instance was then restored headlessly.
+
+## M2c: `document.convert` — pandoc path, PDF wrapper, and batch
+
+On 2026-09-14, live-verified `document.convert` against the real production
+Tauri build and the installed pandoc 3.10.2 and LibreOffice 26.8.0.3. Three
+Markdown fixtures were created in an isolated `/tmp` directory, then the
+running app's real D-Bus `RunTool` entry point exercised the same registry,
+argument coercion, executor, output planning, and command path used by the
+desktop UI. The palette was deliberately not shown during this pass because
+its full-screen transparent layer surface would cover the user's workspace;
+the native picker and visual result card were therefore not re-tested here.
+
+**Pandoc direct path:** one Markdown input was converted to DOCX. The real
+outcome was `Report { title: "1 of 1 converted" }`, consistent with the
+one-item behavior of every `multiple: true` file argument. `file` independently
+identified the result as `Microsoft Word 2007+`, and reading it back through
+pandoc reproduced the heading, paragraph, and list content. This confirms the
+result is a valid document rather than merely a file with a `.docx` suffix.
+
+**LibreOffice PDF wrapper:** a different Markdown input was converted to PDF,
+exercising the descriptor's `sh -c` PDF branch rather than pandoc's direct
+output path. Wield again reported `1 of 1 converted`; `file` identified a PDF
+1.7 document with one page, and `pdfinfo` identified LibreOffice Writer as the
+creator and LibreOffice 26.8.0.3 as the producer. A directory listing before
+and after the run confirmed that only the requested `beta.pdf` result was
+added: the temporary copied Markdown input used to control soffice's forced
+output name was removed by the wrapper's cleanup trap, with no `.wield-tmp-*`
+or other intermediate file left behind.
+
+**Multi-file batch:** the three Markdown fixtures were submitted together for
+standalone HTML output. The real outcome was
+`Report { title: "3 of 3 converted" }` with one successful line per input.
+`file` independently identified all three results as HTML documents, and each
+contained the expected standalone `<html>` element. This confirms the full
+`ArgValue::Paths` → generic batch executor → one pandoc process per file →
+aggregated Report path for the new descriptor.
+
+No conversion defect was found. Other declared input/output combinations
+(`html`, `docx`, `odt`, and `rst` inputs; `md` and `odt` outputs) were not each
+run live because they use the same already-proven pandoc direct branch. The
+descriptor's exact argv for both branches and its full serialized registry
+shape remain covered by automated tests.

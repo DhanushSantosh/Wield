@@ -228,6 +228,7 @@ mod tests {
             vec![
                 "audio.extract",
                 "color.pick",
+                "document.convert",
                 "image.convert",
                 "video.convert"
             ]

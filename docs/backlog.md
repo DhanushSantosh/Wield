@@ -13,7 +13,8 @@ for the milestone plan (M1–M5).
 - **AppStream screenshots.** None published yet; add a `<screenshots>` block
   after release-quality UI captures exist.
 - **Bundled converter binaries.** ImageMagick, pandoc, qpdf, Ghostscript,
-  Tesseract+`eng`, and the `ffmpeg-full` runtime extension are not bundled in
+  Tesseract+`eng`, `libreoffice-fresh`, and the `ffmpeg-full` runtime extension
+  are not bundled in
   the Flatpak — `color.pick` works there, everything `Command`-backed
   (`image.convert`, and M2's `video.convert`/`audio.extract`/
   `document.convert`/`pdf.tools` as they land) reports `Unavailable` inside
@@ -24,6 +25,14 @@ for the milestone plan (M1–M5).
   starting M2 (2026-09-14, owner decision) — Flathub submission itself is on
   hold, so bundling for a Flatpak that isn't being submitted yet is
   low-urgency.
+- **`document.convert` can't read legacy binary Office formats
+  (`.doc`/`.ppt`/`.xls`).** `pandoc` has no reader for them at all
+  (confirmed via `pandoc --list-input-formats` - only the modern XML-based
+  `docx`/`pptx`/`xlsx` are supported). Reading them would need the
+  engine-selection logic to also branch on the *input*'s format, not just
+  the requested output format - real added complexity, deliberately
+  deferred rather than built into M2c's first version. `libreoffice`
+  itself can read these formats fine; only the routing logic is missing.
 - **`gtk-layer-shell` Flatpak build module — missing, will break the next
   release tag.** `layer_shell.rs` links the system `gtk-layer-shell` library;
   `ci.yml`'s ubuntu-latest runners install it directly, but

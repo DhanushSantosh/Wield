@@ -75,6 +75,7 @@ pub struct CommandSpecBuilder {
     binary: String,
     args: Vec<CommandArg>,
     timeout: Duration,
+    progress: ProgressSpec,
 }
 
 impl CommandSpecBuilder {
@@ -83,7 +84,13 @@ impl CommandSpecBuilder {
             binary: binary.to_owned(),
             args: Vec::new(),
             timeout: Duration::from_secs(300),
+            progress: ProgressSpec::None,
         }
+    }
+
+    pub fn progress(mut self, progress: ProgressSpec) -> Self {
+        self.progress = progress;
+        self
     }
 
     pub fn arg(mut self, segment: impl Into<CommandArg>) -> Self {
@@ -125,7 +132,7 @@ impl CommandSpecBuilder {
         CommandSpec {
             binary: self.binary,
             args: self.args,
-            progress: ProgressSpec::None,
+            progress: self.progress,
             timeout: self.timeout,
             success: SuccessSpec::ExitZero,
         }

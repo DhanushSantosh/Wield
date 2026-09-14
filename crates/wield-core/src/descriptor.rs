@@ -218,6 +218,11 @@ impl<'de> Deserialize<'de> for CommandArg {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ProgressSpec {
     None,
+    /// Parses ffmpeg's `-progress pipe:2 -nostats` stderr output against its
+    /// own startup `Duration:` banner line - see `command.rs`'s
+    /// `FfmpegDuration` for the parser. No `ffprobe` call needed; the total
+    /// duration is already on the same stream.
+    FfmpegDuration,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

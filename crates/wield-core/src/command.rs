@@ -125,7 +125,58 @@ pub(crate) trait ProgressParser {
 pub(crate) fn parser_for(spec: &ProgressSpec) -> Option<Box<dyn ProgressParser + Send>> {
     match spec {
         ProgressSpec::None => None,
+        ProgressSpec::FfmpegDuration => Some(Box::new(FfmpegDuration { total_secs: None })),
     }
+}
+
+/// Parses ffmpeg's `-progress pipe:2 -nostats` output into `Progress::Percent`.
+///
+/// Verified live against the actually-installed ffmpeg (n9.0) on the dev
+/// machine, not assumed from docs: the startup banner
+/// (`Duration: 00:00:03.00, start: 0.000000, bitrate: ...`) is printed once
+/// on stderr before any progress blocks, regardless of `-nostats` - so no
+/// separate `ffprobe` call is needed to learn the total duration, it's
+/// already on the same stream this parser already sees. `out_time_us` is
+/// the field trusted for elapsed time, not `out_time_ms` - confirmed live,
+/// both fields report the *identical raw number* on this ffmpeg build
+/// despite the name (a long-standing, documented ffmpeg quirk). Any line
+/// that doesn't match either pattern (ffmpeg's own noise: the version/config
+/// banner, per-codec stats, the one-time final `Lsize=` summary line that
+/// prints even with `-nostats`) is silently ignored, not an error - this
+/// parser is deliberately tolerant of ffmpeg's surrounding output.
+struct FfmpegDuration {
+    total_secs: Option<f64>,
+}
+
+impl ProgressParser for FfmpegDuration {
+    fn parse_line(&mut self, line: &str) -> Option<Progress> {
+        if self.total_secs.is_none() {
+            if let Some(rest) = line.trim_start().strip_prefix("Duration: ") {
+                let timecode = rest.split(',').next()?;
+                self.total_secs = parse_timecode(timecode);
+            }
+            return None;
+        }
+        let out_time_us: u64 = line.strip_prefix("out_time_us=")?.trim().parse().ok()?;
+        let total = self.total_secs?;
+        if total <= 0.0 {
+            return None;
+        }
+        let elapsed_secs = out_time_us as f64 / 1_000_000.0;
+        let percent = (elapsed_secs / total * 100.0).clamp(0.0, 100.0);
+        Some(Progress::Percent(percent.round() as u8))
+    }
+}
+
+/// Parses ffmpeg's `HH:MM:SS.ss` timecode format (as seen in its `Duration:`
+/// banner line) into total seconds. Returns `None` on anything malformed -
+/// this parser only ever degrades to "no progress updates", never panics.
+fn parse_timecode(text: &str) -> Option<f64> {
+    let mut parts = text.trim().splitn(3, ':');
+    let hours: f64 = parts.next()?.parse().ok()?;
+    let minutes: f64 = parts.next()?.parse().ok()?;
+    let seconds: f64 = parts.next()?.parse().ok()?;
+    Some(hours * 3600.0 + minutes * 60.0 + seconds)
 }
 
 impl CommandRunner {

@@ -181,3 +181,77 @@ async fn emits_started_then_finished_for_progress_none() {
         ]
     );
 }
+
+#[tokio::test]
+async fn ffmpeg_duration_parser_reports_percent_from_real_captured_output() {
+    let dir = tempfile::tempdir().unwrap();
+    // Exact lines captured live from a real `ffmpeg -progress pipe:2
+    // -nostats` run during this feature's own design verification - not
+    // synthesized, the real shape ffmpeg actually produces (including the
+    // noise this parser must tolerate: the leftover `frame=  200 fps=0.0
+    // ... Lsize=...` summary line `-nostats` does NOT suppress).
+    let script = r#"#!/bin/sh
+cat <<'EOF' 1>&2
+ffmpeg version n9.0 Copyright (c) 2000-2026 the FFmpeg developers
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'test-input.mp4':
+  Duration: 00:00:08.00, start: 0.000000, bitrate: 47 kb/s
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> h264 (libx264))
+frame=98
+fps=0.00
+stream_0_0_q=28.0
+bitrate=   0.1kbits/s
+total_size=48
+out_time_us=3840000
+out_time_ms=3840000
+out_time=00:00:03.840000
+dup_frames=0
+drop_frames=0
+speed=7.65x
+progress=continue
+frame=  200 fps=0.0 q=-1.0 Lsize=      45KiB time=00:00:07.92 bitrate=  46.3kbits/s speed=9.97x elapsed=0:00:00.79
+frame=200
+fps=0.00
+stream_0_0_q=-1.0
+bitrate=  46.3kbits/s
+total_size=45886
+out_time_us=7920000
+out_time_ms=7920000
+out_time=00:00:07.920000
+dup_frames=0
+drop_frames=0
+speed=9.97x
+progress=end
+EOF
+echo done > "$2"
+"#;
+    let script = support::write_stub_script(dir.path(), "fake-ffmpeg", script);
+    let plan = OutputPlan::for_final(dir.path().join("out.mp4"));
+    let (tx, mut rx) = mpsc::channel(16);
+    let argv = vec![
+        "ignored".to_string(),
+        plan.temp.to_string_lossy().into_owned(),
+    ];
+    let result = CommandRunner::execute(RunSpec {
+        binary: &script,
+        argv: &argv,
+        cwd: None,
+        output: Some(&plan),
+        progress_spec: &ProgressSpec::FfmpegDuration,
+        success: &SuccessSpec::ExitZero,
+        timeout: Duration::from_secs(5),
+        progress: tx,
+        cancel: CancellationToken::new(),
+    })
+    .await;
+    assert!(matches!(result, CommandResult::Success { .. }));
+
+    let mut percents = vec![];
+    while let Ok(progress) = rx.try_recv() {
+        if let wield_core::outcome::Progress::Percent(p) = progress {
+            percents.push(p);
+        }
+    }
+    // 3.84s / 8.00s = 48%, 7.92s / 8.00s = 99% (rounds down from 99.0).
+    assert_eq!(percents, vec![48, 99]);
+}

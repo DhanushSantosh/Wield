@@ -716,10 +716,10 @@ all-success path.
   behavior described above, which ate enough time that further pursuit
   stopped being worth it relative to what it would add. The underlying
   mechanism is not unverified, though: `Executor::run_batch`'s
-  cancel-mid-batch logic has two dedicated automated tests
-  (`batch_stops_before_the_next_file_once_cancelled` covering the
-  mid-file path, both branches of the loop-top cancellation check
-  reviewed line-by-line against the real code during Task 2's review) and
+  cancel-mid-batch logic has one dedicated automated test
+  (`batch_stops_before_the_next_file_once_cancelled`, covering the
+  mid-file path — the loop-top "stop before the next file" branch is
+  verified by code review only, not a second automated test) and
   the underlying `CommandRunner`-level cancellation Escape triggers is the
   same, unchanged mechanism already live-verified for single-file runs
   earlier in this project's history (P5a) and again this session (the
@@ -734,3 +734,23 @@ all-success path.
   the existing `missing_binary_is_unavailable` automated test - `video.convert`
   sharing that code path, unmodified, is a structural guarantee, not an
   assumption.
+
+**Three more paths were never run against real ffmpeg during live
+verification, closed after the fact by this branch's final whole-branch
+review** (not via the desktop UI - by running the exact `ffmpeg` argv
+`video.convert`'s descriptor renders, against real ffmpeg `n9.0`):
+
+- **`resolution` scaling.** Both live desktop runs used the default
+  `original` (which emits none of the six `arg_when`-gated `-vf
+  scale=-2:H` segments). Ran `-vf scale=-2:720` against a 640x480 test
+  source: output was correctly 960x720, aspect preserved, exit 0.
+- **`quality` (`-crf`).** Never set in either live run. Ran `-crf 23`
+  alongside the resolution case above: exit 0, no ffmpeg complaint.
+- **Non-`mp4` output formats.** Both live runs used the default `mp4`.
+  Ran with `.webm` (libvpx-vp9) and `.mkv` (libx264) output extensions:
+  both exit 0, both produce valid output.
+
+No defect found in any of the three. Recorded here rather than left
+implicit, since this doc is what a reader (including a future M2b-d
+author) would reasonably expect to cover the whole descriptor, not just
+its default option values.

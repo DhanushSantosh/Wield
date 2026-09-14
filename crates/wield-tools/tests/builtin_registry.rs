@@ -90,13 +90,108 @@ fn video_convert_renders_ffmpeg_argv_for_present_and_absent_options() {
 }
 
 #[test]
+fn audio_extract_renders_ffmpeg_argv_for_present_and_absent_options() {
+    let tool = builtin_registry().get("audio.extract").unwrap().clone();
+    let Capability::Command(spec) = &tool.capability else {
+        panic!("expected Command");
+    };
+
+    let mut minimal = BTreeMap::new();
+    minimal.insert("input".to_string(), ArgValue::Path("/clips/a.mp4".into()));
+    minimal.insert("format".to_string(), ArgValue::Str("mp3".into()));
+    let out = std::path::PathBuf::from("/clips/a.mp3");
+    assert_eq!(
+        render_argv(&spec.args, &minimal, Some(&out)).unwrap(),
+        vec![
+            "-y".to_string(),
+            "-i".into(),
+            "/clips/a.mp4".into(),
+            "-vn".into(),
+            "-codec:a".into(),
+            "libmp3lame".into(),
+            "-progress".into(),
+            "pipe:2".into(),
+            "-nostats".into(),
+            "/clips/a.mp3".into(),
+        ],
+    );
+
+    let mut full = minimal.clone();
+    full.insert("quality".to_string(), ArgValue::Str("256k".into()));
+    assert_eq!(
+        render_argv(&spec.args, &full, Some(&out)).unwrap(),
+        vec![
+            "-y".to_string(),
+            "-i".into(),
+            "/clips/a.mp4".into(),
+            "-vn".into(),
+            "-codec:a".into(),
+            "libmp3lame".into(),
+            "-b:a".into(),
+            "256k".into(),
+            "-progress".into(),
+            "pipe:2".into(),
+            "-nostats".into(),
+            "/clips/a.mp3".into(),
+        ],
+    );
+}
+
+#[test]
+fn audio_extract_picks_the_right_codec_for_each_format() {
+    let tool = builtin_registry().get("audio.extract").unwrap().clone();
+    let Capability::Command(spec) = &tool.capability else {
+        panic!("expected Command");
+    };
+    let out = std::path::PathBuf::from("/clips/a.out");
+
+    for (format, codec) in [
+        ("mp3", "libmp3lame"),
+        ("m4a", "aac"),
+        ("flac", "flac"),
+        ("wav", "pcm_s16le"),
+    ] {
+        let mut args = BTreeMap::new();
+        args.insert("input".to_string(), ArgValue::Path("/clips/a.mp4".into()));
+        args.insert("format".to_string(), ArgValue::Str(format.to_string()));
+        let argv = render_argv(&spec.args, &args, Some(&out)).unwrap();
+        assert!(
+            argv.windows(2).any(|pair| pair == ["-codec:a", codec]),
+            "format {format}: expected -codec:a {codec} in {argv:?}"
+        );
+        for (_, other_codec) in [
+            ("mp3", "libmp3lame"),
+            ("m4a", "aac"),
+            ("flac", "flac"),
+            ("wav", "pcm_s16le"),
+        ] {
+            if other_codec == codec {
+                continue;
+            }
+            assert!(
+                !argv.iter().any(|segment| segment == other_codec),
+                "format {format}: unexpected codec {other_codec} leaked into {argv:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn registry_has_exactly_the_expected_builtins() {
     let ids: Vec<_> = builtin_registry()
         .list()
         .iter()
         .map(|d| d.id.as_ref().to_string())
         .collect();
-    assert_eq!(ids, vec!["color.pick", "image.convert", "video.convert"]);
+    assert_eq!(
+        ids,
+        vec![
+            "audio.extract",
+            "color.pick",
+            "image.convert",
+            "video.convert"
+        ]
+    );
 }
 
 #[test]

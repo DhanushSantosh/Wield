@@ -28,7 +28,10 @@ export function ArgForm({ tool, initialValues, onSubmit, onEscape }: ArgFormProp
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onSubmit(values);
+    const visibleValues = Object.fromEntries(
+      visible.flatMap((spec) => (spec.name in values ? [[spec.name, values[spec.name]]] : [])),
+    );
+    onSubmit(visibleValues);
   };
   const handleKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
     if (event.key === "Escape") {

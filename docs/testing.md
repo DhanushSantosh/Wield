@@ -766,3 +766,53 @@ No defect found in any of the three. Recorded here rather than left
 implicit, since this doc is what a reader (including a future M2b-d
 author) would reasonably expect to cover the whole descriptor, not just
 its default option values.
+
+## M2b: `audio.extract` — video source, audio source, and batch
+
+On 2026-09-14, live-verified `audio.extract` against the real production
+Tauri build and the system ffmpeg/ffprobe. The fixtures were generated in an
+isolated `/tmp` directory with ffmpeg's `testsrc` and `sine` sources, then the
+running app's real D-Bus `RunTool` entry point exercised the same registry,
+argument coercion, executor, progress parser, output planning, and ffmpeg
+command path used by the desktop UI.
+
+**Video source:** a three-second MP4 containing H.264 video and AAC audio was
+converted with the default MP3 format. Wield reported success and wrote an MP3
+audio-only output. Independent ffprobe inspection found codec `mp3`, duration
+`3.000000`, and no video stream; the source independently reported both H.264
+and AAC streams with the same `3.000000` duration.
+
+**Audio source:** a two-second PCM WAV was converted to FLAC. Wield reported
+success, and ffprobe independently found a FLAC audio stream, 16 raw bits per
+sample, and duration `2.000000`. This confirms `-vn` is harmless for an
+audio-only input and the descriptor is not limited to extracting from video.
+
+**Multi-file batch:** three one-second WAV inputs were converted to M4A with
+the `192k` preset. The real outcome was `Report { title: "3 of 3 converted" }`
+with one successful output line per input. ffprobe independently identified
+all three outputs as AAC in M4A containers, each exactly `1.000000` second.
+
+**One-item outcome correction:** the plan expected a one-file picker selection
+to produce `ToolOutcome::File`. In the real application, a `multiple: true`
+file field is represented as a JSON array even when it contains one path;
+`coerce_json_args` turns that into `ArgValue::Paths`, so the generic batch path
+correctly returns `Report { title: "1 of 1 converted" }`. A scalar string was
+also checked and correctly rejected as `input must be an array of path
+strings`. This is an expectation error in the live-test plan, not a conversion
+failure; both one-file conversions above produced and independently verified
+valid outputs.
+
+**Conditional Bitrate field:** live screenshots of the real palette confirmed
+that `format=mp3` renders the Bitrate selector and `format=flac` hides it. The
+new ArgForm regression test also exercises the consequential state sequence
+directly: select `320k` while MP3 is active, switch to FLAC, submit, and assert
+that the payload is exactly `{ format: "flac" }`. Desktop input automation
+could switch and visually confirm the live field states, but reliably clicking
+the native picker after the full-screen layer-surface transition was too
+fragile to claim a second end-to-end stale-value submission. The actual
+filtering branch is therefore live-render-verified plus unit-submission-
+verified, not falsely claimed as a complete synthetic pointer-driven run.
+
+The branch test process and its full-screen transparent palette backdrop were
+stopped after verification. The user's previously running installed Wield
+instance was then restored headlessly.

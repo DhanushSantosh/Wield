@@ -74,11 +74,15 @@ ffmpeg -y -i <input> -vn -codec:a <codec> [-b:a <bitrate>] out.<ext>
   this project's existing bias toward minimal exposed surface area (e.g.
   `video.convert` doesn't expose stream mapping either).
 - Codec-per-format, all confirmed working end-to-end (`ffprobe`-verified
-  output, correct duration, exit 0):
+  output, correct duration, exit 0). **`format`'s enum value is the output
+  *extension*, not the ffmpeg codec name** — they differ for one entry:
   - `mp3` → `-codec:a libmp3lame`
-  - `aac` → `-codec:a aac` (container is `.m4a`; ffmpeg's own muxer
-    auto-selection from the output extension picks `ipod`/`mp4a`,
-    confirmed correct via `ffprobe`)
+  - `m4a` → `-codec:a aac` (a literal `.aac` output extension was tried
+    first and rejected: it makes ffmpeg select the ADTS muxer, which
+    reports a measurably imprecise duration — `4.950561` instead of the
+    exact `5.0` a `.m4a`/MP4-family container reports for an identical
+    5s source, confirmed via `ffprobe`. `.m4a` is also the far more
+    broadly compatible container for AAC audio in practice.)
   - `flac` → `-codec:a flac`
   - `wav` → `-codec:a pcm_s16le`
 - The output container is inferred entirely from the output file's
@@ -104,9 +108,21 @@ before `color_pick`) and `builtin_registry()`.
   this tool (§1). Batch (`multiple: true`) is included from the start —
   it's now a zero-marginal-cost default for any Command-capability tool,
   not a scope decision to revisit per tool the way it was for M2a.
-- **`format`** — `Enum { options: [mp3, aac, flac, wav] }`, default `mp3`.
+- **`format`** — `Enum { options: [mp3, m4a, flac, wav] }`, default `mp3`.
+  **Corrected from an initial draft of this spec that used `aac` as the
+  option** (verified live, after writing that draft, that this project's
+  `"{input_stem}.{format}"` output-naming template feeds the enum's raw
+  string directly into the output file's extension — the same mechanism
+  `video.convert`'s `format` options already rely on. A literal `.aac`
+  extension makes ffmpeg select the ADTS muxer, which is not only a less
+  broadly compatible container than MP4/`.m4a` but measurably lossier on
+  metadata: a live test produced `duration=4.950561` instead of the exact
+  `5.0` `.m4a` reports for an identical 5s source. `format`'s enum value
+  must be the desired *extension* (`m4a`), independent of the ffmpeg
+  *codec* name (`aac`) used to produce it — those are two different
+  strings and the command spec keeps them separate (§4).
 - **`quality`** — optional `Enum { options: ["128k", "192k", "256k",
-  "320k"] }`, gated via `arg_when` to `format in [mp3, aac]` (flac and wav
+  "320k"] }`, gated via `arg_when` to `format in [mp3, m4a]` (flac and wav
   are lossless — a bitrate knob on them is meaningless, so the field
   doesn't apply and `ArgForm`'s existing `when`-based visibility hides it
   automatically, same mechanism `video.convert`'s resolution-gated
@@ -123,13 +139,13 @@ before `color_pick`) and `builtin_registry()`.
   ```
   ffmpeg -y -i {input} -vn
     -codec:a libmp3lame   (arg_when format in [mp3])
-    -codec:a aac          (arg_when format in [aac])
+    -codec:a aac          (arg_when format in [m4a])
     -codec:a flac         (arg_when format in [flac])
     -codec:a pcm_s16le    (arg_when format in [wav])
     -b:a {quality}         (arg_when_set quality, presence form — only
                              emitted when quality is actually set, which
                              per the arg's own `when` can only happen for
-                             mp3/aac anyway)
+                             mp3/m4a anyway)
     -progress pipe:2 -nostats
     {output}
   ```
@@ -150,12 +166,29 @@ any kind — everything this descriptor needs already exists.
   dubbed language tracks) will get whichever track ffmpeg's own default
   stream selection picks — not user-selectable. Scoped out deliberately
   (§3); revisit only if a real need surfaces.
-- **AAC's container naming.** ffmpeg mapping `format: aac` to a `.m4a`
-  file (via the `ipod` muxer) rather than a bare `.aac` elementary stream
-  is a deliberate choice, not an oversight — `.m4a` is the far more common
-  and more broadly compatible container for AAC audio; a bare `.aac`
-  elementary stream is rarely what a user actually wants. Worth a one-line
-  note in the tool's `help` text if the plan's descriptor step wants one.
+- **A real, previously-latent frontend gap, found by this verification
+  pass, not by inspection.** `quality` is the first `ArgSpec` in this
+  codebase to use `.when(...)` (frontend-visibility gating) on a
+  Command-tool's optional field — `video.convert`'s `resolution`/`quality`
+  are both always-visible, so this interaction has never been exercised
+  end-to-end before. Reading `ArgForm.tsx` directly: its `submit` handler
+  calls `onSubmit(values)` with the *entire* form-state object, not
+  `visible`-filtered — so if a user sets `quality` while `format=mp3`,
+  then switches `format` to `flac` (hiding the now-inapplicable `quality`
+  field from the UI), the stale value is never cleared from state and
+  *is* still submitted. Verified live that ffmpeg tolerates this
+  gracefully in every case tried (`-b:a` alongside `-codec:a flac` bumps
+  the encoder to 24-bit output but stays lossless, exit 0; alongside
+  `-codec:a pcm_s16le` it's silently ignored, exit 0) — not a crash, not
+  data loss, but a real correctness gap (a value the user can no longer
+  see in the UI still reaches the command line) that this milestone's own
+  design is what newly exposes, since no prior descriptor's `.when(...)`
+  usage ever put a stale value at risk of being consequential. Given how
+  small and directly-caused-by-this-work the fix is, the plan includes it
+  as its own task (matching this project's established precedent, M2a's
+  `validate.rs` fix, of correcting a real gap found while building
+  directly on top of the code that exposes it) rather than leaving it as
+  a documented risk to work around.
 - **No Flatpak bundling**, same as every other Command-backed converter
   tool (`image.convert`, `video.convert`) — already tracked in
   `docs/backlog.md`, no new entry needed since `ffmpeg` is already named
@@ -167,19 +200,25 @@ any kind — everything this descriptor needs already exists.
 
 ## 6. Testing strategy
 
-Same shape as M2a's: `render_argv` unit tests for the gated command
-segments (minimal case — no quality set; full case — `format=mp3` +
-`quality="256k"`; one case per remaining format to confirm the right
-`-codec:a` branch fires and no other branch does), a builtin-registry
-snapshot update, and live verification on the real desktop (single-file
-extraction from a real video, single audio-to-audio conversion, and a
-multi-file batch) with `ffprobe`-independent confirmation of each output,
-written up in `docs/testing.md`.
+`ArgForm.tsx`'s fix gets its own regression test first (a `when`-gated
+field is set, its trigger arg changes to hide it, `onSubmit`'s payload is
+asserted to exclude it) — this is what makes `quality`'s `.when(...)` gate
+actually safe to ship. Then the descriptor itself: `render_argv` unit
+tests for the gated command segments (minimal case — no quality set; full
+case — `format=mp3` + `quality="256k"`; one case per remaining format to
+confirm the right `-codec:a` branch fires and no other branch does), a
+builtin-registry snapshot update, and live verification on the real
+desktop (single-file extraction from a real video, single audio-to-audio
+conversion, and a multi-file batch) with `ffprobe`-independent
+confirmation of each output, written up in `docs/testing.md`.
 
 ## 7. Repo artifacts
 
 - This spec: `docs/superpowers/specs/2026-09-14-wield-m2b-audio-extract-design.md`
 - Plan (next): `docs/superpowers/plans/2026-09-14-wield-m2b-audio-extract.md`
+- Modified: `apps/wield/src/palette/ArgForm.tsx` (and its test file) — the
+  stale-hidden-value fix (§5), landed first since the descriptor task
+  relies on it.
 - New: `crates/wield-tools/src/audio_extract.rs`
 - Modified: `crates/wield-tools/src/lib.rs`,
   `crates/wield-tools/tests/builtin_registry.rs`,

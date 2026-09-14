@@ -6,6 +6,7 @@
 
 pub mod audio_extract;
 pub mod color_pick;
+pub mod document_convert;
 pub mod image_convert;
 pub mod video_convert;
 
@@ -21,6 +22,9 @@ pub fn builtin_registry() -> Registry {
     registry
         .register(color_pick::descriptor())
         .expect("color.pick registers");
+    registry
+        .register(document_convert::descriptor())
+        .expect("document.convert registers");
     registry
         .register(image_convert::descriptor())
         .expect("image.convert registers");

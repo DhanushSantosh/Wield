@@ -2,6 +2,24 @@ use std::collections::BTreeMap;
 use wield_core::{render_argv, ArgValue, Capability, Requires};
 use wield_tools::builtin_registry;
 
+const EXPECTED_SCRIPT: &str = r#"set -e
+in="$1"; out="$2"; fmt="$3"
+case "$fmt" in
+  pdf)
+    dir=$(dirname "$out")
+    stem=$(basename "$out" ".$fmt")
+    ext=$(printf "%s" "$in" | sed "s/^.*\.//")
+    tmp="$dir/$stem.$ext"
+    trap "rm -f \"$tmp\"" EXIT
+    cp "$in" "$tmp"
+    soffice --headless --convert-to pdf --outdir "$dir" "$tmp" 1>&2
+    ;;
+  *)
+    pandoc --standalone "$in" -o "$out"
+    ;;
+esac
+"#;
+
 #[test]
 fn color_pick_is_a_valid_portal_tool() {
     let registry = builtin_registry();
@@ -177,6 +195,54 @@ fn audio_extract_picks_the_right_codec_for_each_format() {
 }
 
 #[test]
+fn document_convert_renders_the_pandoc_direct_branch() {
+    let tool = builtin_registry().get("document.convert").unwrap().clone();
+    let Capability::Command(spec) = &tool.capability else {
+        panic!("expected Command");
+    };
+
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path("/docs/a.md".into()));
+    args.insert("format".to_string(), ArgValue::Str("docx".into()));
+    let out = std::path::PathBuf::from("/docs/a.docx");
+    assert_eq!(
+        render_argv(&spec.args, &args, Some(&out)).unwrap(),
+        vec![
+            "-c".to_string(),
+            EXPECTED_SCRIPT.to_string(),
+            "sh".into(),
+            "/docs/a.md".into(),
+            "/docs/a.docx".into(),
+            "docx".into(),
+        ],
+    );
+}
+
+#[test]
+fn document_convert_renders_the_pdf_wrapper_branch() {
+    let tool = builtin_registry().get("document.convert").unwrap().clone();
+    let Capability::Command(spec) = &tool.capability else {
+        panic!("expected Command");
+    };
+
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path("/docs/a.md".into()));
+    args.insert("format".to_string(), ArgValue::Str("pdf".into()));
+    let out = std::path::PathBuf::from("/docs/a.pdf");
+    assert_eq!(
+        render_argv(&spec.args, &args, Some(&out)).unwrap(),
+        vec![
+            "-c".to_string(),
+            EXPECTED_SCRIPT.to_string(),
+            "sh".into(),
+            "/docs/a.md".into(),
+            "/docs/a.pdf".into(),
+            "pdf".into(),
+        ],
+    );
+}
+
+#[test]
 fn registry_has_exactly_the_expected_builtins() {
     let ids: Vec<_> = builtin_registry()
         .list()
@@ -188,6 +254,7 @@ fn registry_has_exactly_the_expected_builtins() {
         vec![
             "audio.extract",
             "color.pick",
+            "document.convert",
             "image.convert",
             "video.convert"
         ]

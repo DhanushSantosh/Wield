@@ -277,6 +277,112 @@
     }
   },
   {
+    "id": "document.convert",
+    "title": "Convert document",
+    "keywords": [
+      "document",
+      "convert",
+      "pandoc",
+      "libreoffice",
+      "pdf",
+      "docx",
+      "odt",
+      "markdown"
+    ],
+    "category": "Convert",
+    "args": [
+      {
+        "name": "input",
+        "label": "Document",
+        "help": null,
+        "arg_type": {
+          "File": {
+            "filters": [
+              {
+                "label": "Documents",
+                "extensions": [
+                  "md",
+                  "html",
+                  "docx",
+                  "odt",
+                  "rst"
+                ]
+              }
+            ],
+            "multiple": true
+          }
+        },
+        "default": null,
+        "required": true,
+        "when": null
+      },
+      {
+        "name": "format",
+        "label": "Output format",
+        "help": null,
+        "arg_type": {
+          "Enum": {
+            "options": [
+              "md",
+              "html",
+              "docx",
+              "odt",
+              "pdf"
+            ]
+          }
+        },
+        "default": {
+          "Str": "md"
+        },
+        "required": true,
+        "when": null
+      }
+    ],
+    "requires": {
+      "Binary": "pandoc"
+    },
+    "output": {
+      "File": {
+        "name": "{input_stem}.{format}",
+        "dir": "SameAsInput"
+      }
+    },
+    "capability": {
+      "Command": {
+        "binary": "sh",
+        "args": [
+          {
+            "template": "-c",
+            "when": null
+          },
+          {
+            "template": "set -e\nin=\"$1\"; out=\"$2\"; fmt=\"$3\"\ncase \"$fmt\" in\n  pdf)\n    dir=$(dirname \"$out\")\n    stem=$(basename \"$out\" \".$fmt\")\n    ext=$(printf \"%s\" \"$in\" | sed \"s/^.*\\.//\")\n    tmp=\"$dir/$stem.$ext\"\n    trap \"rm -f \\\"$tmp\\\"\" EXIT\n    cp \"$in\" \"$tmp\"\n    soffice --headless --convert-to pdf --outdir \"$dir\" \"$tmp\" 1>&2\n    ;;\n  *)\n    pandoc --standalone \"$in\" -o \"$out\"\n    ;;\nesac\n",
+            "when": null
+          },
+          {
+            "template": "sh",
+            "when": null
+          },
+          {
+            "template": "{input}",
+            "when": null
+          },
+          {
+            "template": "{output}",
+            "when": null
+          },
+          {
+            "template": "{format}",
+            "when": null
+          }
+        ],
+        "progress": "None",
+        "timeout": 300,
+        "success": "ExitZero"
+      }
+    }
+  },
+  {
     "id": "image.convert",
     "title": "Convert image",
     "keywords": [

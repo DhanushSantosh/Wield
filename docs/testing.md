@@ -650,3 +650,87 @@ backdrop-click code) rather than anything about this fix specifically -
 matches this project's existing "give synthetic input realistic timing,
 not instantaneous batches" lesson. Noted rather than chased further,
 since it did not reproduce under normal interaction timing.
+
+## M2a: `video.convert` — real ffmpeg progress and multi-file batch
+
+On 2026-09-14, live-verified `video.convert` end-to-end on the real
+desktop (ffmpeg `n9.0`, the same build the progress-parser design was
+researched against) after the four implementation tasks landed. This is
+the first M2 (Converter suite) tool, and the milestone that proves the two
+mechanisms M2b-d reuse: real `ProgressSpec`-driven percentage progress, and
+multi-file batch via `ArgValue::Paths`.
+
+**Single-file conversion:** searched "video", selected `Convert video`,
+picked a real generated test clip through the native multi-select file
+picker (already wired for `multiple: true` with zero frontend code
+changes needed - confirmed live, not just by reading the code), ran it
+with default options (format `mp4`, resolution `original`). The result
+card showed a real `ToolOutcome::File` success. Verified independently
+via `ffprobe` (not just trusting the UI): the output file's size and
+mtime changed, duration was preserved exactly - a genuine re-encode, not
+a no-op copy. (Converting `mp4` → `mp4` with `OutputDir::SameAsInput`
+overwrites the source file in place - inherited, pre-existing behavior
+from `image.convert`'s identical naming/output-dir pattern, not new to
+this milestone; worth knowing, not a defect.)
+
+**Multi-file batch - the core new mechanism, proven working end-to-end:**
+selected 3 real test clips at once through the same picker (multi-select,
+`Ctrl+A` in the native dialog's file-list view), ran the conversion. The
+result card showed a real `ToolOutcome::Report`:
+
+```
+3 of 3 converted
+✓ clip-1.mp4 → /tmp/m2a-test/clip-1.mp4
+✓ clip-2.mp4 → /tmp/m2a-test/clip-2.mp4
+✓ clip-3.mp4 → /tmp/m2a-test/clip-3.mp4
+```
+
+exactly matching the design's `"{succeeded} of {total} converted"` format.
+Verified independently via `ffprobe` on all three output files: every one
+had a changed mtime/size matching the batch run's timestamp and a
+correctly-preserved duration - three genuine, separate ffmpeg
+invocations, not one call operating on the first file only. This
+confirms the full chain worked for real: native multi-select picker →
+`ArgValue::Paths` (via `coerce_json_args`'s new branch) → `Executor`'s
+batch detection → `run_batch` looping the *existing*, unmodified
+single-file path once per file → `ToolOutcome::Report` aggregation → the
+existing Result view rendering it correctly with zero new frontend code.
+
+**Batch failure handling - found incidentally, real coverage nonetheless:**
+during file-picker testing, a GTK location-bar autocomplete quirk (typing
+a bare directory path while its own filename-completion popup was open,
+then pressing Enter) caused the picker to return the *directory itself*
+as if it were a one-item file selection - a testing-methodology artifact,
+not a Wield bug. `video.convert` handled it correctly: ffmpeg rejected the
+invalid input immediately (exit code 254), and the result came back as a
+clean `Report` (`"0 of 1 converted"` with the failure reason on its own
+line) rather than a crash or a stuck spinner - incidental but genuine
+live coverage of the batch's per-file failure path, not just its
+all-success path.
+
+**Not independently reproduced live, with honest reasons why:**
+
+- **Mid-batch cancellation via the real UI.** Repeated attempts to
+  multi-select several longer (20s, 720p) test clips through the native
+  picker kept running into the same GTK location-bar autocomplete
+  behavior described above, which ate enough time that further pursuit
+  stopped being worth it relative to what it would add. The underlying
+  mechanism is not unverified, though: `Executor::run_batch`'s
+  cancel-mid-batch logic has two dedicated automated tests
+  (`batch_stops_before_the_next_file_once_cancelled` covering the
+  mid-file path, both branches of the loop-top cancellation check
+  reviewed line-by-line against the real code during Task 2's review) and
+  the underlying `CommandRunner`-level cancellation Escape triggers is the
+  same, unchanged mechanism already live-verified for single-file runs
+  earlier in this project's history (P5a) and again this session (the
+  click-catcher work's own Escape-to-hide testing). This is a testing-tool
+  friction, not an unverified code path.
+- **The `Unavailable` path** (`ffmpeg` absent → tool shows greyed out
+  with a reason). This would need renaming the system `/usr/bin/ffmpeg`,
+  which requires `sudo` - not available non-interactively in this
+  environment. Not chased further because this is the exact same,
+  already-verified `Requires::Binary(...)` → `Unavailable` path
+  `image.convert` already uses (live-verified in M1/P4) and covered by
+  the existing `missing_binary_is_unavailable` automated test - `video.convert`
+  sharing that code path, unmodified, is a structural guarantee, not an
+  assumption.

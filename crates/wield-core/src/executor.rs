@@ -2,14 +2,16 @@
 
 use crate::args::{validate_args, ArgMap, ArgValue};
 use crate::command::{BinaryResolver, CommandResult, CommandRunner, OutputPlan, RunSpec};
-use crate::descriptor::{Capability, Descriptor, Requires};
+use crate::descriptor::{Capability, Descriptor, OutputSpec, Requires};
 use crate::outcome::{hint_for_stderr, Progress, Stage, ToolOutcome};
-use crate::template::{compute_output_path, render_argv};
+use crate::template::{compute_output_path, render_argv, render_output_name, resolve_output_dir};
 use crate::validate::validate_descriptor;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Default)]
 pub struct AvailabilityView {
@@ -158,12 +160,20 @@ impl Executor {
         progress: mpsc::Sender<Progress>,
         cancel: CancellationToken,
     ) -> ToolOutcome {
-        if let Some((arg_name, paths)) = batch_paths(effective) {
+        if let OutputSpec::Directory { name, dir } = &descriptor.output {
             return self
-                .run_batch(
-                    descriptor, command, effective, arg_name, &paths, progress, cancel,
-                )
+                .run_split(descriptor, command, effective, name, dir, progress, cancel)
                 .await;
+        }
+
+        if !command.combine_inputs {
+            if let Some((arg_name, paths)) = batch_paths(effective) {
+                return self
+                    .run_batch(
+                        descriptor, command, effective, arg_name, &paths, progress, cancel,
+                    )
+                    .await;
+            }
         }
 
         let output_path = match compute_output_path(&descriptor.output, effective) {
@@ -284,6 +294,138 @@ impl Executor {
         ToolOutcome::Report {
             title: format!("{succeeded} of {} converted", paths.len()),
             lines,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn run_split(
+        &self,
+        descriptor: &Descriptor,
+        command: &crate::descriptor::CommandSpec,
+        effective: &ArgMap,
+        name_template: &str,
+        dir: &crate::descriptor::OutputDir,
+        progress: mpsc::Sender<Progress>,
+        cancel: CancellationToken,
+    ) -> ToolOutcome {
+        let _ = descriptor;
+        let destination = match resolve_output_dir(dir, effective) {
+            Ok(path) => path,
+            Err(error) => return failed(Stage::Output, error.to_string()),
+        };
+        let prefix = match render_output_name(name_template, effective) {
+            Ok(name) => name,
+            Err(error) => return failed(Stage::Output, error.to_string()),
+        };
+        let scratch = destination.join(format!(".wield-tmp-{}-split", Uuid::new_v4()));
+        if let Err(error) = std::fs::create_dir_all(&scratch) {
+            return failed(Stage::Output, error.to_string());
+        }
+
+        let argv = match render_argv(&command.args, effective, Some(&scratch)) {
+            Ok(argv) => argv,
+            Err(error) => {
+                let _ = std::fs::remove_dir_all(&scratch);
+                return failed(Stage::Command, error.to_string());
+            }
+        };
+        let Some(binary) = self.resolver.resolve(&command.binary) else {
+            let _ = std::fs::remove_dir_all(&scratch);
+            return unavailable_binary(&command.binary);
+        };
+        let cwd = match effective.get("input") {
+            Some(ArgValue::Path(input)) => input.parent().map(ToOwned::to_owned),
+            _ => None,
+        };
+
+        let result = CommandRunner::execute(RunSpec {
+            binary: &binary,
+            argv: &argv,
+            cwd: cwd.as_deref(),
+            output: None,
+            progress_spec: &command.progress,
+            success: &command.success,
+            timeout: command.timeout,
+            progress,
+            cancel,
+        })
+        .await;
+
+        match result {
+            CommandResult::Success { .. } => {
+                let mut entries: Vec<PathBuf> = match std::fs::read_dir(&scratch) {
+                    Ok(entries) => entries
+                        .filter_map(|entry| entry.ok().map(|e| e.path()))
+                        .collect(),
+                    Err(error) => {
+                        let _ = std::fs::remove_dir_all(&scratch);
+                        return failed(Stage::Output, error.to_string());
+                    }
+                };
+                entries.sort();
+                if entries.is_empty() {
+                    let _ = std::fs::remove_dir_all(&scratch);
+                    return failed(Stage::Output, "command produced no output files");
+                }
+                let mut lines = Vec::new();
+                for (index, source) in entries.iter().enumerate() {
+                    let final_path = destination.join(format!("{prefix}-{}.pdf", index + 1));
+                    match std::fs::rename(source, &final_path) {
+                        Ok(()) => lines.push(format!(
+                            "\u{2713} page {} \u{2192} {}",
+                            index + 1,
+                            final_path.display()
+                        )),
+                        Err(error) => lines.push(format!("\u{2717} page {}: {error}", index + 1)),
+                    }
+                }
+                let _ = std::fs::remove_dir_all(&scratch);
+                ToolOutcome::Report {
+                    title: format!("Split into {} files", lines.len()),
+                    lines,
+                }
+            }
+            CommandResult::NonZeroExit { code, stderr_tail } => {
+                let _ = std::fs::remove_dir_all(&scratch);
+                ToolOutcome::Failed {
+                    stage: Stage::Command,
+                    detail: format!(
+                        "exited with {}",
+                        code.map(|v| v.to_string())
+                            .unwrap_or_else(|| "signal".to_owned())
+                    ),
+                    hint: hint_for_stderr(&stderr_tail),
+                }
+            }
+            CommandResult::Timeout => {
+                let _ = std::fs::remove_dir_all(&scratch);
+                failed(
+                    Stage::Command,
+                    format!("timed out after {:?}", command.timeout),
+                )
+            }
+            CommandResult::Cancelled => {
+                let _ = std::fs::remove_dir_all(&scratch);
+                ToolOutcome::Cancelled
+            }
+            CommandResult::SpawnFailed { detail } => {
+                let _ = std::fs::remove_dir_all(&scratch);
+                ToolOutcome::Failed {
+                    stage: Stage::Command,
+                    detail,
+                    hint: Some(format!("could not start {}", command.binary)),
+                }
+            }
+            CommandResult::OutputMissing => {
+                // Unreachable in practice: finish_output only ever
+                // produces OutputMissing when passed Some(plan);
+                // run_split always passes output: None, so
+                // CommandRunner::execute short-circuits to
+                // Success{output_file: None} on the success path
+                // instead. Handled anyway for exhaustiveness.
+                let _ = std::fs::remove_dir_all(&scratch);
+                failed(Stage::Output, "expected output file was not created")
+            }
         }
     }
 }

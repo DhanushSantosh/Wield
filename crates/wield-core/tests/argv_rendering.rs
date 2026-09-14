@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use wield_core::args::ArgValue;
-use wield_core::descriptor::{ArgValueLiteral, CommandArg, When};
-use wield_core::template::{render_argv, render_output_name};
+use wield_core::descriptor::{ArgValueLiteral, CommandArg, OutputDir, OutputSpec, When};
+use wield_core::template::{compute_output_path, render_argv, render_output_name};
 
 fn map(pairs: &[(&str, ArgValue)]) -> BTreeMap<String, ArgValue> {
     pairs
@@ -163,4 +163,21 @@ fn input_stem_falls_back_to_the_first_path_when_input_is_a_paths_value() {
     let args: Vec<CommandArg> = vec!["{input_stem}".into()];
     let argv = render_argv(&args, &effective, None).unwrap();
     assert_eq!(argv, vec!["report".to_string()]);
+}
+
+#[test]
+fn compute_output_path_same_as_input_falls_back_to_the_first_path() {
+    let effective = map(&[(
+        "input",
+        ArgValue::Paths(vec![
+            PathBuf::from("/docs/a.pdf"),
+            PathBuf::from("/docs/b.pdf"),
+        ]),
+    )]);
+    let output = OutputSpec::File {
+        name: "{input_stem}-merged.pdf".into(),
+        dir: OutputDir::SameAsInput,
+    };
+    let path = compute_output_path(&output, &effective).unwrap();
+    assert_eq!(path, Some(PathBuf::from("/docs/a-merged.pdf")));
 }

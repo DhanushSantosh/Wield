@@ -67,6 +67,19 @@ fn accepts_a_well_formed_descriptor() {
 }
 
 #[test]
+fn accepts_a_directory_output_descriptor() {
+    let mut descriptor = base_command_descriptor();
+    descriptor.output = OutputSpec::Directory {
+        name: "{input_stem}".into(),
+        dir: OutputDir::SameAsInput,
+    };
+    if let Capability::Command(command) = &mut descriptor.capability {
+        command.args = vec!["{input}".into(), "{output_dir}".into()];
+    }
+    assert!(validate_descriptor(&descriptor).is_ok());
+}
+
+#[test]
 fn rejects_duplicate_arg_names() {
     let mut descriptor = base_command_descriptor();
     descriptor.args.push(descriptor.args[0].clone());

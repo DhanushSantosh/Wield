@@ -72,19 +72,36 @@ pub fn compute_output_path(
         return Ok(None);
     };
     let name = render_output_name(name, effective)?;
-    let directory = match dir {
-        OutputDir::Fixed(path) => path.clone(),
+    let directory = resolve_output_dir(dir, effective)?;
+    Ok(Some(directory.join(name)))
+}
+
+/// Resolves an `OutputDir` to a real directory path. Shared by
+/// `compute_output_path` (single-file outputs) and
+/// `Executor::run_split` (`OutputSpec::Directory` outputs) - both need
+/// "where does the result live", just with something different joined
+/// onto it afterward. `SameAsInput` accepts a `Paths` value the same
+/// way `resolve()`'s `input`/`input_stem`/`input_dir` handling already
+/// does (Task 1) - falls back to the first selected file. Needed for
+/// `pdf.merge` (Task 4): its `input` is `multiple: true`, so
+/// `effective.get("input")` is always `ArgValue::Paths`, never a bare
+/// `Path` - without this fallback, `compute_output_path` would fail
+/// with `MissingInputArg` on every single merge.
+pub fn resolve_output_dir(dir: &OutputDir, effective: &ArgMap) -> Result<PathBuf, TemplateError> {
+    match dir {
+        OutputDir::Fixed(path) => Ok(path.clone()),
         OutputDir::SameAsInput => {
-            let Some(ArgValue::Path(input)) = effective.get("input") else {
-                return Err(TemplateError::MissingInputArg);
+            let input = match effective.get("input") {
+                Some(ArgValue::Path(input)) => input,
+                Some(ArgValue::Paths(paths)) if !paths.is_empty() => &paths[0],
+                _ => return Err(TemplateError::MissingInputArg),
             };
-            input
+            Ok(input
                 .parent()
                 .unwrap_or_else(|| Path::new(""))
-                .to_path_buf()
+                .to_path_buf())
         }
-    };
-    Ok(Some(directory.join(name)))
+    }
 }
 
 pub fn render_argv(

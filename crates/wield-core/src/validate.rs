@@ -172,15 +172,18 @@ fn check_capability_and_output(descriptor: &Descriptor, errors: &mut Vec<Descrip
         (Capability::Command(command), OutputSpec::File { name, .. }) => {
             check_command_templates(descriptor, command, name, errors);
         }
+        (Capability::Command(command), OutputSpec::Directory { name, .. }) => {
+            check_command_templates(descriptor, command, name, errors);
+        }
         (Capability::Command(_), _) => error(
             errors,
             "output",
-            "Command capability requires File output in P2",
+            "Command capability requires File or Directory output in P2",
         ),
-        (_, OutputSpec::File { .. }) => error(
+        (_, OutputSpec::File { .. } | OutputSpec::Directory { .. }) => error(
             errors,
             "output",
-            "File output requires Command capability in P2",
+            "File or Directory output requires Command capability in P2",
         ),
         _ => {}
     }
@@ -256,7 +259,7 @@ fn check_template(
     };
 
     for token in tokens {
-        if token == "output" {
+        if matches!(token.as_str(), "output" | "output_dir") {
             if !allow_output {
                 error(
                     errors,

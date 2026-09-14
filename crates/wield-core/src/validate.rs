@@ -248,18 +248,12 @@ fn check_template(
         }
 
         if matches!(token.as_str(), "input" | "input_stem" | "input_dir") {
-            let valid_input = matches!(
-                positions.get("input"),
-                Some(ArgType::File {
-                    multiple: false,
-                    ..
-                })
-            );
+            let valid_input = matches!(positions.get("input"), Some(ArgType::File { .. }));
             if !valid_input {
                 error(
                     errors,
                     &at,
-                    format!("{token} requires a single-file input argument"),
+                    format!("{token} requires a file input argument"),
                 );
             }
             continue;

@@ -58,6 +58,41 @@ for the milestone plan (M1–M5).
   Escape or the tray remain reliable there. Full writeup:
   `docs/testing.md`'s "Click-away-to-dismiss" section.
 
+## Converter tooling (M2)
+
+- **`ReportResult` (multi-file batch outcome) has no actions.** `FileResult`
+  offers "Open folder"/"Run again"; the batch summary card
+  (`ReportResult.tsx`) renders plain text only, so a user can't click
+  through to any of the converted files. Every M2 tool is a batch tool via
+  `Executor::run_batch`, so this is worth closing before M2b-d repeat the
+  pattern. Flagged by the M2a final review.
+- **`video.convert`'s `quality` (CRF) help text assumes libx264.** The
+  descriptor offers `mp4`/`webm`/`mkv`; libvpx-vp9 (used for `webm`) has a
+  0-63 CRF scale (not 0-51) and wants `-b:v 0` alongside `-crf` for true
+  constant-quality mode. Not a bug (the current command still succeeds),
+  but the copy is misleading for 2 of the 3 offered formats. Flagged by
+  the M2a final review.
+- **`quality`'s `[0, 51]` range makes `0` (lossless, huge output) reachable
+  by accident.** `FormField.tsx`'s numeric coercion treats a cleared field
+  as `0`, and `0` is a valid, meaningful CRF value here (unlike
+  `image.convert`'s `[1, 100]` range, which is immune). Affects any future
+  optional `Int` arg whose valid range includes 0 - a `FormField.tsx`-level
+  fix (distinguish "empty" from "0") would close it for every tool at
+  once, not just this one. Flagged by the M2a final review.
+- **`video.convert`'s 1800s timeout may be tight for `webm` (libvpx-vp9) at
+  default speed settings**, which is meaningfully slower than libx264. Not
+  hit in testing; noted as a risk for a long 1080p-to-webm conversion.
+- **`compute_output_path`'s `OutputDir::SameAsInput` hardcodes the literal
+  arg name `"input"`** (`template.rs`), while `run_batch` is generic over
+  whichever arg holds the `ArgValue::Paths`. A future multi-file arg not
+  named `input` would silently fail per-file with `MissingInputArg` rather
+  than erroring at descriptor-build time. Pre-existing, made newly visible
+  by `run_batch`'s genericity. Flagged by the M2a final review.
+- **`FfmpegDuration` (the ffmpeg progress parser) lives directly in
+  `command.rs`.** Fine for one parser; worth splitting into its own
+  `progress/` submodule once M2c/M2d (`document.convert`, `pdf.tools`) add
+  their own `ProgressParser` impls.
+
 ## Misc
 
 - **LICENSE still says "Copyright (c) 2025".** Inherited from the original

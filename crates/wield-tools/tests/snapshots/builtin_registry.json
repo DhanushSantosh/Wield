@@ -1,5 +1,254 @@
 [
   {
+    "id": "audio.extract",
+    "title": "Extract audio",
+    "keywords": [
+      "audio",
+      "extract",
+      "convert",
+      "ffmpeg",
+      "mp3",
+      "m4a",
+      "flac",
+      "wav",
+      "track"
+    ],
+    "category": "Convert",
+    "args": [
+      {
+        "name": "input",
+        "label": "Video or audio",
+        "help": null,
+        "arg_type": {
+          "File": {
+            "filters": [
+              {
+                "label": "Video & audio",
+                "extensions": [
+                  "mp4",
+                  "mov",
+                  "mkv",
+                  "webm",
+                  "avi",
+                  "mp3",
+                  "wav",
+                  "flac",
+                  "m4a",
+                  "aac"
+                ]
+              }
+            ],
+            "multiple": true
+          }
+        },
+        "default": null,
+        "required": true,
+        "when": null
+      },
+      {
+        "name": "format",
+        "label": "Output format",
+        "help": null,
+        "arg_type": {
+          "Enum": {
+            "options": [
+              "mp3",
+              "m4a",
+              "flac",
+              "wav"
+            ]
+          }
+        },
+        "default": {
+          "Str": "mp3"
+        },
+        "required": true,
+        "when": null
+      },
+      {
+        "name": "quality",
+        "label": "Bitrate",
+        "help": "Only applies to mp3/m4a - flac and wav are lossless.",
+        "arg_type": {
+          "Enum": {
+            "options": [
+              "128k",
+              "192k",
+              "256k",
+              "320k"
+            ]
+          }
+        },
+        "default": null,
+        "required": false,
+        "when": {
+          "arg": "format",
+          "in": [
+            {
+              "Str": "mp3"
+            },
+            {
+              "Str": "m4a"
+            }
+          ]
+        }
+      }
+    ],
+    "requires": {
+      "Binary": "ffmpeg"
+    },
+    "output": {
+      "File": {
+        "name": "{input_stem}.{format}",
+        "dir": "SameAsInput"
+      }
+    },
+    "capability": {
+      "Command": {
+        "binary": "ffmpeg",
+        "args": [
+          {
+            "template": "-y",
+            "when": null
+          },
+          {
+            "template": "-i",
+            "when": null
+          },
+          {
+            "template": "{input}",
+            "when": null
+          },
+          {
+            "template": "-vn",
+            "when": null
+          },
+          {
+            "template": "-codec:a",
+            "when": {
+              "arg": "format",
+              "in": [
+                {
+                  "Str": "mp3"
+                }
+              ]
+            }
+          },
+          {
+            "template": "libmp3lame",
+            "when": {
+              "arg": "format",
+              "in": [
+                {
+                  "Str": "mp3"
+                }
+              ]
+            }
+          },
+          {
+            "template": "-codec:a",
+            "when": {
+              "arg": "format",
+              "in": [
+                {
+                  "Str": "m4a"
+                }
+              ]
+            }
+          },
+          {
+            "template": "aac",
+            "when": {
+              "arg": "format",
+              "in": [
+                {
+                  "Str": "m4a"
+                }
+              ]
+            }
+          },
+          {
+            "template": "-codec:a",
+            "when": {
+              "arg": "format",
+              "in": [
+                {
+                  "Str": "flac"
+                }
+              ]
+            }
+          },
+          {
+            "template": "flac",
+            "when": {
+              "arg": "format",
+              "in": [
+                {
+                  "Str": "flac"
+                }
+              ]
+            }
+          },
+          {
+            "template": "-codec:a",
+            "when": {
+              "arg": "format",
+              "in": [
+                {
+                  "Str": "wav"
+                }
+              ]
+            }
+          },
+          {
+            "template": "pcm_s16le",
+            "when": {
+              "arg": "format",
+              "in": [
+                {
+                  "Str": "wav"
+                }
+              ]
+            }
+          },
+          {
+            "template": "-b:a",
+            "when": {
+              "arg": "quality",
+              "in": []
+            }
+          },
+          {
+            "template": "{quality}",
+            "when": {
+              "arg": "quality",
+              "in": []
+            }
+          },
+          {
+            "template": "-progress",
+            "when": null
+          },
+          {
+            "template": "pipe:2",
+            "when": null
+          },
+          {
+            "template": "-nostats",
+            "when": null
+          },
+          {
+            "template": "{output}",
+            "when": null
+          }
+        ],
+        "progress": "FfmpegDuration",
+        "timeout": 300,
+        "success": "ExitZero"
+      }
+    }
+  },
+  {
     "id": "color.pick",
     "title": "Pick a colour",
     "keywords": [

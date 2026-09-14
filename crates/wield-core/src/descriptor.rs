@@ -167,6 +167,7 @@ pub struct CommandSpec {
     #[serde(with = "duration_secs")]
     pub timeout: Duration,
     pub success: SuccessSpec,
+    pub combine_inputs: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

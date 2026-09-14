@@ -244,7 +244,8 @@
         ],
         "progress": "FfmpegDuration",
         "timeout": 300,
-        "success": "ExitZero"
+        "success": "ExitZero",
+        "combine_inputs": false
       }
     }
   },
@@ -378,7 +379,8 @@
         ],
         "progress": "None",
         "timeout": 300,
-        "success": "ExitZero"
+        "success": "ExitZero",
+        "combine_inputs": false
       }
     }
   },
@@ -535,7 +537,8 @@
         ],
         "progress": "None",
         "timeout": 120,
-        "success": "ExitZero"
+        "success": "ExitZero",
+        "combine_inputs": false
       }
     }
   },
@@ -760,7 +763,8 @@
         ],
         "progress": "FfmpegDuration",
         "timeout": 1800,
-        "success": "ExitZero"
+        "success": "ExitZero",
+        "combine_inputs": false
       }
     }
   }

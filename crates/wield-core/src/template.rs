@@ -107,6 +107,24 @@ pub fn render_argv(
             continue;
         }
 
+        // A segment that is *exactly* one bare placeholder (nothing else
+        // in the template string) referencing a `Paths`-valued arg
+        // spreads into one argv element per path, in order, instead of
+        // the normal single-value substitution below. Only ever fires
+        // when a raw `Paths` value reaches this function at all, which
+        // by construction only happens when `CommandSpec.combine_inputs`
+        // is `true` (otherwise `Executor::run_command` already routed
+        // it through `run_batch`'s per-file loop before render_argv ever
+        // sees it) - inert for every other descriptor.
+        if let Some(bare_name) = bare_placeholder(&segment.template) {
+            if let Some(ArgValue::Paths(paths)) = effective.get(bare_name) {
+                for path in paths {
+                    rendered.push(path_string(path)?);
+                }
+                continue;
+            }
+        }
+
         let tokens = placeholders(&segment.template)?;
         let mut value = segment.template.clone();
         let mut unresolved = false;
@@ -124,12 +142,24 @@ pub fn render_argv(
     Ok(rendered)
 }
 
+/// `Some(name)` when `template` is exactly one placeholder with nothing
+/// else around it (e.g. `"{input}"`), `None` otherwise (e.g.
+/// `"{output_dir}/page-%d.pdf"`, which has more than just the
+/// placeholder, or `"-y"`, which has none).
+fn bare_placeholder(template: &str) -> Option<&str> {
+    let inner = template.strip_prefix('{')?.strip_suffix('}')?;
+    if inner.contains('{') || inner.contains('}') {
+        return None;
+    }
+    Some(inner)
+}
+
 fn resolve(
     name: &str,
     effective: &ArgMap,
     output_path: Option<&Path>,
 ) -> Result<Option<String>, TemplateError> {
-    if name == "output" {
+    if matches!(name, "output" | "output_dir") {
         let Some(path) = output_path else {
             return Err(TemplateError::UnresolvedInOutputName(name.to_owned()));
         };
@@ -137,8 +167,10 @@ fn resolve(
     }
 
     if matches!(name, "input" | "input_stem" | "input_dir") {
-        let Some(ArgValue::Path(input)) = effective.get("input") else {
-            return Ok(None);
+        let input = match effective.get("input") {
+            Some(ArgValue::Path(input)) => input,
+            Some(ArgValue::Paths(paths)) if !paths.is_empty() => &paths[0],
+            _ => return Ok(None),
         };
         return match name {
             "input" => path_string(input).map(Some),

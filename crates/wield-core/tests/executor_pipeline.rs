@@ -72,6 +72,7 @@ fn convert_descriptor(binary: &str) -> Descriptor {
             progress: ProgressSpec::None,
             timeout: Duration::from_secs(5),
             success: SuccessSpec::ExitZero,
+            combine_inputs: false,
         }),
     }
 }

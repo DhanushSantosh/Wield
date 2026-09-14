@@ -31,6 +31,7 @@ fn base_command_descriptor() -> Descriptor {
             progress: ProgressSpec::None,
             timeout: Duration::from_secs(60),
             success: SuccessSpec::ExitZero,
+            combine_inputs: false,
         }),
     }
 }

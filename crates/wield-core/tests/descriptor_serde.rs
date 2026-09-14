@@ -78,6 +78,7 @@ fn sample() -> Descriptor {
             progress: ProgressSpec::None,
             timeout: Duration::from_secs(300),
             success: SuccessSpec::ExitZero,
+            combine_inputs: false,
         }),
     }
 }

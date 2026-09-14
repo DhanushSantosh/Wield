@@ -76,6 +76,7 @@ pub struct CommandSpecBuilder {
     args: Vec<CommandArg>,
     timeout: Duration,
     progress: ProgressSpec,
+    combine_inputs: bool,
 }
 
 impl CommandSpecBuilder {
@@ -85,11 +86,23 @@ impl CommandSpecBuilder {
             args: Vec::new(),
             timeout: Duration::from_secs(300),
             progress: ProgressSpec::None,
+            combine_inputs: false,
         }
     }
 
     pub fn progress(mut self, progress: ProgressSpec) -> Self {
         self.progress = progress;
+        self
+    }
+
+    /// When `true`, `Executor::run_command` skips the normal per-file
+    /// batch loop for a `multiple: true` File arg and instead lets a
+    /// bare `{name}` placeholder referencing it spread into N argv
+    /// elements in one command invocation - for tools like `pdf.merge`
+    /// that genuinely combine several inputs into one output, rather
+    /// than converting each independently.
+    pub fn combine_inputs(mut self, combine_inputs: bool) -> Self {
+        self.combine_inputs = combine_inputs;
         self
     }
 
@@ -135,6 +148,7 @@ impl CommandSpecBuilder {
             progress: self.progress,
             timeout: self.timeout,
             success: SuccessSpec::ExitZero,
+            combine_inputs: self.combine_inputs,
         }
     }
 }

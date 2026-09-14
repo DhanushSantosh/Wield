@@ -48,6 +48,7 @@ fn check_arg_names(args: &[ArgSpec], errors: &mut Vec<DescriptorError>) {
 }
 
 fn check_arg_types(args: &[ArgSpec], errors: &mut Vec<DescriptorError>) {
+    let mut multi_file_args = Vec::new();
     for (index, arg) in args.iter().enumerate() {
         match &arg.arg_type {
             ArgType::Int { range, step } => {
@@ -94,6 +95,9 @@ fn check_arg_types(args: &[ArgSpec], errors: &mut Vec<DescriptorError>) {
                     );
                 }
             }
+            ArgType::File { multiple: true, .. } => {
+                multi_file_args.push(index);
+            }
             _ => {}
         }
 
@@ -112,6 +116,22 @@ fn check_arg_types(args: &[ArgSpec], errors: &mut Vec<DescriptorError>) {
                 );
             }
         }
+    }
+
+    if multi_file_args.len() > 1 {
+        let indices = multi_file_args
+            .iter()
+            .map(|index| format!("args[{index}]"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        error(
+            errors,
+            "args",
+            format!(
+                "a descriptor may have at most one `multiple: true` File argument, found {}: {indices}",
+                multi_file_args.len()
+            ),
+        );
     }
 }
 

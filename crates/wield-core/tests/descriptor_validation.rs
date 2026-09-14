@@ -36,6 +36,31 @@ fn base_command_descriptor() -> Descriptor {
 }
 
 #[test]
+fn rejects_two_multi_file_args() {
+    let mut descriptor = base_command_descriptor();
+    descriptor.args[0].arg_type = ArgType::File {
+        filters: vec![],
+        multiple: true,
+    };
+    descriptor.args.push(ArgSpec {
+        name: "second".into(),
+        label: "second".into(),
+        help: None,
+        arg_type: ArgType::File {
+            filters: vec![],
+            multiple: true,
+        },
+        default: None,
+        required: true,
+        when: None,
+    });
+    let errors = validate_descriptor(&descriptor).unwrap_err();
+    assert!(errors
+        .iter()
+        .any(|error| error.message.contains("multiple: true")));
+}
+
+#[test]
 fn accepts_a_well_formed_descriptor() {
     assert!(validate_descriptor(&base_command_descriptor()).is_ok());
 }

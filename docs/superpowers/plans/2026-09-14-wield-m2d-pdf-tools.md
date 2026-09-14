@@ -542,7 +542,21 @@ pub enum OutputSpec {
 }
 ```
 
-- [ ] **Step 2: Extract `resolve_output_dir` from `compute_output_path`**
+- [ ] **Step 2: Extract `resolve_output_dir` from `compute_output_path` — with the same `Paths` fallback Task 1 gave `resolve()`**
+
+**Corrected during execution, before any code was written for this
+step** - found by tracing Task 4's `pdf.merge` (`OutputDir::SameAsInput`
++ a `multiple: true` input, so `effective.get("input")` is
+`ArgValue::Paths`, never `ArgValue::Path`) against this exact function as
+originally drafted. The original draft only matched
+`Some(ArgValue::Path(input))` - for `pdf.merge` that would hit the `else`
+branch and return `Err(MissingInputArg)` on *every* run, before `qpdf`
+ever executes. This is the same class of gap Task 1 Step 3 already fixed
+in `resolve()` - `resolve_output_dir` is a *different* function (until
+this step, `compute_output_path`'s own private, inline `SameAsInput`
+handling) that happens to need the identical fix. Extract it correctly
+the first time rather than doing a "pure" extraction now and patching it
+right after.
 
 In `crates/wield-core/src/template.rs`, find:
 
@@ -590,13 +604,21 @@ pub fn compute_output_path(
 /// `compute_output_path` (single-file outputs) and
 /// `Executor::run_split` (`OutputSpec::Directory` outputs) - both need
 /// "where does the result live", just with something different joined
-/// onto it afterward.
+/// onto it afterward. `SameAsInput` accepts a `Paths` value the same
+/// way `resolve()`'s `input`/`input_stem`/`input_dir` handling already
+/// does (Task 1) - falls back to the first selected file. Needed for
+/// `pdf.merge` (Task 4): its `input` is `multiple: true`, so
+/// `effective.get("input")` is always `ArgValue::Paths`, never a bare
+/// `Path` - without this fallback, `compute_output_path` would fail
+/// with `MissingInputArg` on every single merge.
 pub fn resolve_output_dir(dir: &OutputDir, effective: &ArgMap) -> Result<PathBuf, TemplateError> {
     match dir {
         OutputDir::Fixed(path) => Ok(path.clone()),
         OutputDir::SameAsInput => {
-            let Some(ArgValue::Path(input)) = effective.get("input") else {
-                return Err(TemplateError::MissingInputArg);
+            let input = match effective.get("input") {
+                Some(ArgValue::Path(input)) => input,
+                Some(ArgValue::Paths(paths)) if !paths.is_empty() => &paths[0],
+                _ => return Err(TemplateError::MissingInputArg),
             };
             Ok(input
                 .parent()
@@ -607,15 +629,47 @@ pub fn resolve_output_dir(dir: &OutputDir, effective: &ArgMap) -> Result<PathBuf
 }
 ```
 
-This is a pure refactor - `compute_output_path`'s own behavior for
-`OutputSpec::File` is unchanged; run its existing tests to confirm.
+Behavior-preserving for every *existing* descriptor: none of them ever
+reach `compute_output_path` with a raw `Paths` value for "input" in the
+first place (`run_batch` always substitutes a single `Path` per
+iteration before `compute_output_path` runs) - the new match arm is
+inert for `image.convert`/`video.convert`/`audio.extract`/
+`document.convert`/`pdf.compress`, and only matters for `pdf.merge`
+(Task 4), the one descriptor with both `combine_inputs: true` and
+`OutputDir::SameAsInput`.
 
-- [ ] **Step 3: Run `template.rs`'s tests to confirm the refactor is behavior-preserving**
+- [ ] **Step 3: Write a test for the `Paths` fallback**
+
+In `crates/wield-core/tests/argv_rendering.rs` (already imports
+`render_output_name`; add `compute_output_path` and `OutputDir`,
+`OutputSpec` to the existing `wield_core::template`/
+`wield_core::descriptor` import lines), add:
+
+```rust
+#[test]
+fn compute_output_path_same_as_input_falls_back_to_the_first_path() {
+    let effective = map(&[(
+        "input",
+        ArgValue::Paths(vec![
+            PathBuf::from("/docs/a.pdf"),
+            PathBuf::from("/docs/b.pdf"),
+        ]),
+    )]);
+    let output = OutputSpec::File {
+        name: "{input_stem}-merged.pdf".into(),
+        dir: OutputDir::SameAsInput,
+    };
+    let path = compute_output_path(&output, &effective).unwrap();
+    assert_eq!(path, Some(PathBuf::from("/docs/a-merged.pdf")));
+}
+```
+
+- [ ] **Step 4: Run `template.rs`'s tests to confirm the refactor is behavior-preserving and the new fallback works**
 
 Run: `cargo test -p wield-core --test argv_rendering`
 Expected: PASS, no change from before Step 2.
 
-- [ ] **Step 4: Validate `OutputSpec::Directory`**
+- [ ] **Step 5: Validate `OutputSpec::Directory`**
 
 In `crates/wield-core/src/validate.rs`, find:
 
@@ -701,7 +755,7 @@ Change the condition to also accept `"output_dir"`:
         }
 ```
 
-- [ ] **Step 5: Write the validation test**
+- [ ] **Step 6: Write the validation test**
 
 In `crates/wield-core/tests/descriptor_validation.rs`, find the existing
 `base_command_descriptor()` helper (constructs a `Descriptor` with a
@@ -727,12 +781,12 @@ fn accepts_a_directory_output_descriptor() {
 }
 ```
 
-- [ ] **Step 6: Run the validation test**
+- [ ] **Step 7: Run the validation test**
 
 Run: `cargo test -p wield-core --test descriptor_validation`
 Expected: PASS.
 
-- [ ] **Step 7: Add `run_split` to the executor**
+- [ ] **Step 8: Add `run_split` to the executor**
 
 In `crates/wield-core/src/executor.rs`, find the import lines at the top:
 
@@ -962,7 +1016,7 @@ line, delete it (an unused `fn` parameter isn't always warned on the way
 an unused local binding is) - don't leave a no-op line if it isn't
 needed, but don't guess either; check the real clippy output.
 
-- [ ] **Step 8: Write the `run_split` integration tests**
+- [ ] **Step 9: Write the `run_split` integration tests**
 
 In `crates/wield-core/tests/executor_pipeline.rs`, read the file's
 existing `write_stub_script`/`convert_descriptor` helper conventions
@@ -1069,7 +1123,7 @@ so `OutputSpec`, `OutputDir`, `Capability`, and everything else from
 `ArgValue`, `BTreeMap`, `Executor`, `BinaryResolver`, `ExecutionRequest`,
 `ToolOutcome`, `CancellationToken`, `mpsc`. No import changes needed.
 
-- [ ] **Step 9: Full workspace gate**
+- [ ] **Step 10: Full workspace gate**
 
 ```bash
 cargo fmt --all -- --check
@@ -1078,13 +1132,14 @@ cargo test --workspace -- --test-threads=1
 npm run check
 ```
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add crates/wield-core/src/descriptor.rs \
   crates/wield-core/src/template.rs \
   crates/wield-core/src/validate.rs \
   crates/wield-core/src/executor.rs \
+  crates/wield-core/tests/argv_rendering.rs \
   crates/wield-core/tests/descriptor_validation.rs \
   crates/wield-core/tests/executor_pipeline.rs
 git commit -m "feat(core): add OutputSpec::Directory — an unknown-until-runtime file count
@@ -1100,6 +1155,13 @@ the same place run_batch already lives: a fresh scratch directory
 whatever files appeared after a successful run, rename each into its
 final destination, report via the existing ToolOutcome::Report - zero
 new frontend work, the same card M2a's batch summaries already render.
+
+Also fixes a real gap found while extracting resolve_output_dir out of
+compute_output_path: its SameAsInput branch only matched a single Path,
+which would have made pdf.merge (Task 4, multiple:true input) fail with
+MissingInputArg on every run - now falls back to the first selected
+file, mirroring the same fix Task 1 already made to resolve()'s own
+input/input_stem/input_dir handling.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```

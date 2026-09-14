@@ -665,13 +665,25 @@ picked a real generated test clip through the native multi-select file
 picker (already wired for `multiple: true` with zero frontend code
 changes needed - confirmed live, not just by reading the code), ran it
 with default options (format `mp4`, resolution `original`). The result
-card showed a real `ToolOutcome::File` success. Verified independently
-via `ffprobe` (not just trusting the UI): the output file's size and
-mtime changed, duration was preserved exactly - a genuine re-encode, not
-a no-op copy. (Converting `mp4` → `mp4` with `OutputDir::SameAsInput`
-overwrites the source file in place - inherited, pre-existing behavior
-from `image.convert`'s identical naming/output-dir pattern, not new to
-this milestone; worth knowing, not a defect.)
+card showed a real `ToolOutcome::Report` success (`"1 of 1 converted"`),
+**not** `ToolOutcome::File` as this section originally (and incorrectly)
+claimed — corrected 2026-09-14 after M2b's own live verification
+independently caught the discrepancy. `video.convert`'s `input` is
+`multiple: true`, so even a single selection through the picker is a
+one-element JSON array; `coerce_json_args` turns that into
+`ArgValue::Paths` regardless of length, and `Executor::run_command`
+dispatches to `run_batch` unconditionally whenever any `ArgValue::Paths`
+is present (confirmed by reading `batch_paths`/`run_command` directly —
+there is no length check anywhere in that path). A `multiple: true`
+descriptor can therefore never produce `ToolOutcome::File`, single
+selection or not; the underlying conversion itself was always correct,
+this was a documentation-only error. Verified independently via `ffprobe`
+(not just trusting the UI): the output file's size and mtime changed,
+duration was preserved exactly - a genuine re-encode, not a no-op copy.
+(Converting `mp4` → `mp4` with `OutputDir::SameAsInput` overwrites the
+source file in place - inherited, pre-existing behavior from
+`image.convert`'s identical naming/output-dir pattern, not new to this
+milestone; worth knowing, not a defect.)
 
 **Multi-file batch - the core new mechanism, proven working end-to-end:**
 selected 3 real test clips at once through the same picker (multi-select,

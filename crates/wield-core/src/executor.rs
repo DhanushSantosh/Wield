@@ -316,7 +316,10 @@ fn batch_paths(effective: &ArgMap) -> Option<(&str, Vec<std::path::PathBuf>)> {
 
 fn outcome_summary(outcome: &ToolOutcome) -> String {
     match outcome {
-        ToolOutcome::Failed { detail, .. } => detail.clone(),
+        ToolOutcome::Failed { detail, hint, .. } => match hint {
+            Some(hint) => format!("{detail} — {hint}"),
+            None => detail.clone(),
+        },
         ToolOutcome::Unavailable { reason, .. } => reason.clone(),
         other => format!("{other:?}"),
     }

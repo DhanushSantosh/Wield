@@ -101,6 +101,20 @@ for the milestone plan (M1–M5).
   `command.rs`.** Fine for one parser; worth splitting into its own
   `progress/` submodule once M2c/M2d (`document.convert`, `pdf.tools`) add
   their own `ProgressParser` impls.
+- **`pdf.split`'s discovered-file order is alphabetical, not numeric.**
+  At 10+ pages, `qpdf`'s own `%d`-numbered output (`page-1.pdf`,
+  `page-10.pdf`, `page-2.pdf`, ...) sorts lexicographically wrong before
+  `Executor::run_split` renumbers them - each split file's *content* is
+  still correct (exactly one real page each), but which page ends up
+  labeled `-2` vs `-10` in the final filename could be off for larger
+  documents. Not fixed for M2d: a numeric-aware sort is a small,
+  legitimate follow-up, not core-mechanism work.
+- **`pdf.compress` has no batch support**, unlike every other M2
+  converter tool. It could reasonably take `multiple: true` (independent
+  per-file compression, exactly `run_batch`'s existing shape) - left out
+  of M2d's scope deliberately, to keep this milestone's real
+  scope (two new wield-core mechanisms) from also absorbing a third,
+  unrelated addition.
 
 ## Misc
 

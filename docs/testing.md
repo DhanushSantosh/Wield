@@ -858,3 +858,40 @@ No conversion defect was found. Other declared input/output combinations
 run live because they use the same already-proven pandoc direct branch. The
 descriptor's exact argv for both branches and its full serialized registry
 shape remain covered by automated tests.
+
+## M2d: `pdf.compress`, `pdf.merge`, and `pdf.split`
+
+On 2026-09-14, live-verified all three PDF tools against the real production
+Tauri build and the installed qpdf 12.4.1 and Ghostscript 10.08.0. Test PDFs
+were created in an isolated `/tmp` directory, then the running app's real
+D-Bus `RunTool` entry point exercised the same registry, argument coercion,
+executor, output planning, and subprocess paths used by the desktop UI. The
+palette was deliberately not shown because its full-screen transparent layer
+surface would cover the user's workspace; the native picker and visual result
+cards were therefore not re-tested in this pass.
+
+**Compression presets:** a three-page, image-heavy 5,788,919-byte source PDF
+was compressed with both the `screen` and `printer` presets. Both real runs
+returned `ToolOutcome::File`, preserved all three pages, and produced valid PDF
+1.4 documents. The `screen` result was 169,414 bytes and the `printer` result
+was 432,780 bytes, independently confirming that Ghostscript performed real
+compression and that the two quality presets produce materially different
+outputs.
+
+**Ordered merge:** two one-page PDFs containing distinct text were submitted
+as `alpha.pdf`, then `beta.pdf`. Wield returned `ToolOutcome::File` for
+`alpha-merged.pdf`; qpdf independently reported two pages, equal to the sum of
+the inputs. Extracted text placed `ALPHA PAGE` on page 1 and `BETA PAGE ONE` /
+`BETA PAGE TWO` on page 2, confirming that the combined-input argv preserves
+the selected-file order.
+
+**Split report and cleanup:** the three-page source was split through the new
+directory-output executor path. Wield returned
+`Report { title: "Split into 3 files" }` with three final output paths. qpdf
+independently reported exactly one page in each output, and a filesystem scan
+found no scratch-directory residue after completion.
+
+No conversion defect was found. A 10-or-more-page split was not run live; the
+known lexicographic-versus-numeric discovery-order gap is tracked explicitly in
+`docs/backlog.md`. The branch test process was stopped after verification and
+the user's installed Wield service was restored headlessly.

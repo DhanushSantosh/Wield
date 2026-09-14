@@ -183,6 +183,23 @@ test("an argument tool opens its form and streams progress before the result", a
   expect(await screen.findByText("/tmp/out.webp")).toBeInTheDocument();
 });
 
+test("a Started event after a Message keeps the message visible (batch narration)", async () => {
+  const run = deferred<RunResult>();
+  runToolMock.mockReturnValue(run.promise);
+  render(<App />);
+  await userEvent.click(await screen.findByText("Convert image"));
+  await userEvent.click(screen.getByRole("button", { name: "Convert image" }));
+  const onProgress = runToolMock.mock.calls[0][2] as (progress: unknown) => void;
+  act(() => onProgress({ Message: "Converting 1 of 2: a.png" }));
+  expect(await screen.findByText("Converting 1 of 2: a.png")).toBeInTheDocument();
+  act(() => onProgress("Started"));
+  expect(screen.getByText("Converting 1 of 2: a.png")).toBeInTheDocument();
+  act(() => onProgress({ Percent: 50 }));
+  expect(screen.getByText("Converting 1 of 2: a.png")).toBeInTheDocument();
+  expect(screen.getByTestId("progress-fill")).toHaveStyle({ width: "50%" });
+  await act(async () => run.resolve({ run_id: "run-2", outcome: { File: { path: "/tmp/out.webp" } } }));
+});
+
 test("Escape cancels a running tool and waits for Cancelled before returning to search", async () => {
   const run = deferred<RunResult>();
   runToolMock.mockReturnValue(run.promise);

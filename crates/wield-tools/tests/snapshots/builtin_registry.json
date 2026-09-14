@@ -183,5 +183,230 @@
         "success": "ExitZero"
       }
     }
+  },
+  {
+    "id": "video.convert",
+    "title": "Convert video",
+    "keywords": [
+      "video",
+      "convert",
+      "ffmpeg",
+      "mp4",
+      "webm",
+      "mkv",
+      "resolution",
+      "format"
+    ],
+    "category": "Convert",
+    "args": [
+      {
+        "name": "input",
+        "label": "Video",
+        "help": null,
+        "arg_type": {
+          "File": {
+            "filters": [
+              {
+                "label": "Videos",
+                "extensions": [
+                  "mp4",
+                  "mov",
+                  "mkv",
+                  "webm",
+                  "avi"
+                ]
+              }
+            ],
+            "multiple": true
+          }
+        },
+        "default": null,
+        "required": true,
+        "when": null
+      },
+      {
+        "name": "format",
+        "label": "Output format",
+        "help": null,
+        "arg_type": {
+          "Enum": {
+            "options": [
+              "mp4",
+              "webm",
+              "mkv"
+            ]
+          }
+        },
+        "default": {
+          "Str": "mp4"
+        },
+        "required": true,
+        "when": null
+      },
+      {
+        "name": "resolution",
+        "label": "Resolution",
+        "help": "\"original\" keeps the source resolution unchanged.",
+        "arg_type": {
+          "Enum": {
+            "options": [
+              "original",
+              "1080p",
+              "720p",
+              "480p"
+            ]
+          }
+        },
+        "default": {
+          "Str": "original"
+        },
+        "required": true,
+        "when": null
+      },
+      {
+        "name": "quality",
+        "label": "Quality (CRF)",
+        "help": "Lower is higher quality (libx264's CRF scale - the opposite of most \"quality\" sliders). Leave blank for ffmpeg's own default.",
+        "arg_type": {
+          "Int": {
+            "range": [
+              0,
+              51
+            ],
+            "step": 1
+          }
+        },
+        "default": null,
+        "required": false,
+        "when": null
+      }
+    ],
+    "requires": {
+      "Binary": "ffmpeg"
+    },
+    "output": {
+      "File": {
+        "name": "{input_stem}.{format}",
+        "dir": "SameAsInput"
+      }
+    },
+    "capability": {
+      "Command": {
+        "binary": "ffmpeg",
+        "args": [
+          {
+            "template": "-y",
+            "when": null
+          },
+          {
+            "template": "-i",
+            "when": null
+          },
+          {
+            "template": "{input}",
+            "when": null
+          },
+          {
+            "template": "-vf",
+            "when": {
+              "arg": "resolution",
+              "in": [
+                {
+                  "Str": "1080p"
+                }
+              ]
+            }
+          },
+          {
+            "template": "scale=-2:1080",
+            "when": {
+              "arg": "resolution",
+              "in": [
+                {
+                  "Str": "1080p"
+                }
+              ]
+            }
+          },
+          {
+            "template": "-vf",
+            "when": {
+              "arg": "resolution",
+              "in": [
+                {
+                  "Str": "720p"
+                }
+              ]
+            }
+          },
+          {
+            "template": "scale=-2:720",
+            "when": {
+              "arg": "resolution",
+              "in": [
+                {
+                  "Str": "720p"
+                }
+              ]
+            }
+          },
+          {
+            "template": "-vf",
+            "when": {
+              "arg": "resolution",
+              "in": [
+                {
+                  "Str": "480p"
+                }
+              ]
+            }
+          },
+          {
+            "template": "scale=-2:480",
+            "when": {
+              "arg": "resolution",
+              "in": [
+                {
+                  "Str": "480p"
+                }
+              ]
+            }
+          },
+          {
+            "template": "-crf",
+            "when": {
+              "arg": "quality",
+              "in": []
+            }
+          },
+          {
+            "template": "{quality}",
+            "when": {
+              "arg": "quality",
+              "in": []
+            }
+          },
+          {
+            "template": "-progress",
+            "when": null
+          },
+          {
+            "template": "pipe:2",
+            "when": null
+          },
+          {
+            "template": "-nostats",
+            "when": null
+          },
+          {
+            "template": "{output}",
+            "when": null
+          }
+        ],
+        "progress": "FfmpegDuration",
+        "timeout": 1800,
+        "success": "ExitZero"
+      }
+    }
   }
 ]

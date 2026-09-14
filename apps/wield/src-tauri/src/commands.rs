@@ -225,7 +225,7 @@ mod tests {
         let all = list_tools_impl(&state, None);
         assert_eq!(
             all.iter().map(|tool| tool.id.as_str()).collect::<Vec<_>>(),
-            vec!["color.pick", "image.convert"]
+            vec!["color.pick", "image.convert", "video.convert"]
         );
     }
 

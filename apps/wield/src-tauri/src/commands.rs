@@ -76,7 +76,24 @@ pub fn coerce_json_args(
             .find(|spec| spec.name == *name)
             .ok_or_else(|| format!("unknown argument: {name}"))?;
         let value = match &spec.arg_type {
-            ArgType::File { .. } | ArgType::Dir => value
+            ArgType::File { multiple: true, .. } => {
+                let items = value
+                    .as_array()
+                    .ok_or_else(|| format!("{name} must be an array of path strings"))?;
+                let paths = items
+                    .iter()
+                    .map(|item| {
+                        item.as_str()
+                            .map(std::path::PathBuf::from)
+                            .ok_or_else(|| format!("{name} must be an array of path strings"))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                ArgValue::Paths(paths)
+            }
+            ArgType::File {
+                multiple: false, ..
+            }
+            | ArgType::Dir => value
                 .as_str()
                 .map(|value| ArgValue::Path(value.into()))
                 .ok_or_else(|| format!("{name} must be a path string"))?,
@@ -294,6 +311,51 @@ mod tests {
             &serde_json::json!({ "bogus": 1 }),
         )
         .is_err());
+    }
+
+    #[tokio::test]
+    async fn coerce_json_args_accepts_an_array_for_a_multi_file_arg() {
+        let mut descriptor = wield_core::DescriptorBuilder::new(
+            "test.batch",
+            "Test batch",
+            wield_core::Category::Convert,
+        )
+        .arg(
+            wield_core::ArgSpecBuilder::new(
+                "input",
+                "Input",
+                wield_core::ArgType::File {
+                    filters: vec![],
+                    multiple: true,
+                },
+            )
+            .required(true)
+            .build(),
+        )
+        .requires(wield_core::Requires::None)
+        .output(wield_core::OutputSpec::File {
+            name: "output".to_owned(),
+            dir: wield_core::OutputDir::SameAsInput,
+        })
+        .command(wield_core::CommandSpecBuilder::new("true"))
+        .build()
+        .expect("descriptor should be valid");
+        descriptor.id = wield_core::ToolId::parse("test.batch").unwrap();
+
+        let args = serde_json::json!({ "input": ["/a.mp4", "/b.mp4"] });
+        let result = coerce_json_args(&descriptor, &args).expect("array should coerce");
+        assert_eq!(
+            result.get("input"),
+            Some(&ArgValue::Paths(vec!["/a.mp4".into(), "/b.mp4".into()]))
+        );
+    }
+
+    #[tokio::test]
+    async fn coerce_json_args_rejects_an_array_for_a_single_file_arg() {
+        let state = AppState::build().await;
+        let descriptor = state.registry.get("image.convert").unwrap();
+        let args = serde_json::json!({ "input": ["/a.png"], "format": "png" });
+        assert!(coerce_json_args(descriptor, &args).is_err());
     }
 
     #[tokio::test]

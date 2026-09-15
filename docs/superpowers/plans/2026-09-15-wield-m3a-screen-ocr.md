@@ -117,8 +117,18 @@ Note: `write_stub_script` and `support` come from the file's existing `mod suppo
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cargo test -p wield-core --test executor_pipeline all_requires_blocks_on_the_first_unmet_entry all_requires_met_runs_the_tool probe_binaries_collects_a_binary_nested_inside_all`
-Expected: FAIL to compile — `Requires::All` does not exist yet.
+`cargo test` accepts exactly one positional `TESTNAME` filter (a substring
+match), not several — run it as two commands instead:
+
+```bash
+cargo test -p wield-core --test executor_pipeline all_requires
+cargo test -p wield-core --test executor_pipeline probe_binaries_collects_a_binary_nested_inside_all
+```
+
+(`all_requires` as a substring matches both
+`all_requires_blocks_on_the_first_unmet_entry` and
+`all_requires_met_runs_the_tool`.)
+Expected: both FAIL to compile — `Requires::All` does not exist yet.
 
 - [ ] **Step 3: Add the `All` variant**
 
@@ -372,7 +382,14 @@ async fn injected_native_runner_receives_the_native_id() {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cargo test -p wield-core --test executor_pipeline native_capability_with_no_runner_configured_is_failed injected_native_runner_receives_the_native_id`
+`cargo test` accepts only one positional `TESTNAME` filter (same note as
+Task 1 Step 2) — these two names share no substring, so run the whole
+file instead of filtering:
+
+```bash
+cargo test -p wield-core --test executor_pipeline
+```
+
 Expected: FAIL to compile — `NativeRunner`, `Executor::with_native` don't exist yet.
 
 - [ ] **Step 3: Create the `NativeRunner` trait**

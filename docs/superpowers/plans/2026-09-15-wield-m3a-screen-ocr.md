@@ -27,10 +27,12 @@
 **Files:**
 - Modify: `crates/wield-core/src/descriptor.rs` (the `Requires` enum, currently `None`/`Portal{..}`/`Binary(..)`)
 - Modify: `crates/wield-core/src/executor.rs` (the inline `match &request.descriptor.requires` in `run()`, and `AvailabilityView::probe_binaries`)
-- Test: `crates/wield-core/tests/executor_pipeline.rs`
+- Modify: `crates/wield-core/src/registry.rs` (`Registry::available` — a **third**, independent exhaustive match over `Requires`, missed in the original design; caught by the Rust compiler's exhaustiveness check once `All` existed, and correctly stopped-on rather than improvised around per the plan's own etiquette — see Step 6)
+- Modify: `apps/wield/src-tauri/src/capabilities.rs` (`is_available` — a **fourth** exhaustive match, one crate up; plus `report()`'s binary-collection loop, which has the same nested-`All` gap without being a compile error — see Step 7)
+- Test: `crates/wield-core/tests/executor_pipeline.rs`, `crates/wield-core/tests/registry.rs`, `apps/wield/src-tauri/src/capabilities.rs` (new inline `#[cfg(test)]` module — this file had none before)
 
 **Interfaces:**
-- Produces: `Requires::All(Vec<Requires>)` variant; a free function `fn check_requires(requires: &Requires, resolver: &BinaryResolver, portals: &HashMap<String, u32>) -> Option<ToolOutcome>` (returns `Some(blocking_outcome)` if unmet, `None` if satisfied); a free function `fn available_binaries(requires: &Requires, resolver: &BinaryResolver) -> Vec<String>`. Both are used by later tasks' descriptors (`screen.ocr` in Task 5) without further changes here.
+- Produces: `Requires::All(Vec<Requires>)` variant; a free function `fn check_requires(requires: &Requires, resolver: &BinaryResolver, portals: &HashMap<String, u32>) -> Option<ToolOutcome>` (returns `Some(blocking_outcome)` if unmet, `None` if satisfied); a free function `fn available_binaries(requires: &Requires, resolver: &BinaryResolver) -> Vec<String>`; a free function `fn requires_satisfied(requires: &Requires, view: &AvailabilityView) -> bool` in `registry.rs`; `apps/wield/src-tauri/src/capabilities.rs`'s existing `is_available` gains an `All` arm and a new `fn binary_requirements(requires: &Requires) -> Vec<&String>` helper. All of these are used by later tasks' descriptors (`screen.ocr` in Task 5) without further changes here.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -271,17 +273,280 @@ fn available_binaries(requires: &Requires, resolver: &BinaryResolver) -> Vec<Str
 }
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [ ] **Step 6: Run `cargo test -p wield-core` and fix the compile error it surfaces**
 
-Run: `cargo test -p wield-core --test executor_pipeline`
-Expected: PASS, including the three new tests and every pre-existing test in the file (the `None`/`Binary`/`Portal` behavior is unchanged, only relocated).
+Run: `cargo test -p wield-core` (the whole crate, not just `executor_pipeline` — this is deliberate: it's how the next gap surfaces).
 
-Also run: `cargo test -p wield-core` (the crate's other test files touch `Requires`/`AvailabilityView` too — confirm nothing else broke).
+Expected: **fails to compile** with an E0004 non-exhaustive-match error at `crates/wield-core/src/registry.rs`, inside `Registry::available`. This is real, not a mistake in these steps — `Registry::available` is a *third*, independent site that exhaustively matches on `Requires` (separate from `check_requires` and `available_binaries`, both in `executor.rs`), missed when this plan was first written. It's what actually decides which tools the palette shows as available versus greyed-out, so it genuinely needs `Requires::All` semantics too, not just a placeholder arm to satisfy the compiler.
 
-- [ ] **Step 7: Commit**
+In `crates/wield-core/src/registry.rs`, find:
+
+```rust
+    /// The subset of tools whose `requires` is satisfied by `view`.
+    pub fn available<'a>(&'a self, view: &AvailabilityView) -> Vec<&'a Descriptor> {
+        self.tools
+            .iter()
+            .filter(|tool| match &tool.requires {
+                Requires::None => true,
+                Requires::Binary(binary) => view.binaries.contains(binary),
+                Requires::Portal { iface, min_ver } => view
+                    .portals
+                    .get(iface)
+                    .is_some_and(|version| version >= min_ver),
+            })
+            .collect()
+    }
+```
+
+Replace with:
+
+```rust
+    /// The subset of tools whose `requires` is satisfied by `view`.
+    pub fn available<'a>(&'a self, view: &AvailabilityView) -> Vec<&'a Descriptor> {
+        self.tools
+            .iter()
+            .filter(|tool| requires_satisfied(&tool.requires, view))
+            .collect()
+    }
+```
+
+And add this free function near the bottom of the file (after the `impl Registry` block, next to nothing else currently there — it's the first free function in this file):
+
+```rust
+/// `All` requires every nested requirement to hold; every other variant is
+/// exactly `Registry::available`'s original per-variant check, unchanged.
+fn requires_satisfied(requires: &Requires, view: &AvailabilityView) -> bool {
+    match requires {
+        Requires::None => true,
+        Requires::Binary(binary) => view.binaries.contains(binary),
+        Requires::Portal { iface, min_ver } => view
+            .portals
+            .get(iface)
+            .is_some_and(|version| version >= min_ver),
+        Requires::All(all) => all.iter().all(|inner| requires_satisfied(inner, view)),
+    }
+}
+```
+
+Add a test to `crates/wield-core/tests/registry.rs`, matching the existing `available_filters_on_binaries` test's style (it already imports `Requires` via `use wield_core::descriptor::*;` and constructs descriptors via the file's own `cmd_tool` helper — for this test, build on that helper's output and override `requires` directly, the same way `executor_pipeline.rs`'s tests already do to its own `convert_descriptor` helper):
+
+```rust
+#[test]
+fn available_requires_every_entry_of_an_all_requirement() {
+    let mut r = Registry::new();
+    let mut portal_and_binary = cmd_tool("screen.ocr", "tesseract", &[]);
+    portal_and_binary.requires = Requires::All(vec![
+        Requires::Portal {
+            iface: "Screenshot".into(),
+            min_ver: 2,
+        },
+        Requires::Binary("tesseract".into()),
+    ]);
+    r.register(portal_and_binary).unwrap();
+
+    let mut view = AvailabilityView {
+        binaries: Default::default(),
+        portals: Default::default(),
+    };
+    view.binaries.insert("tesseract".into());
+    // Portal missing from `view.portals` — only one of the two `All` entries is met.
+    assert!(r.available(&view).is_empty());
+
+    view.portals.insert("Screenshot".into(), 2);
+    // Now both are met.
+    let avail: Vec<_> = r
+        .available(&view)
+        .iter()
+        .map(|d| d.id.as_ref().to_string())
+        .collect();
+    assert_eq!(avail, vec!["screen.ocr"]);
+}
+```
+
+Run: `cargo test -p wield-core`
+Expected: PASS, everything — this is the point where the whole crate (not just `executor_pipeline.rs`) compiles and tests clean with `Requires::All` fully handled everywhere it's matched.
+
+- [ ] **Step 7: Run `cargo build` from the repo root and fix the fourth site it surfaces**
+
+`wield-core` alone now compiles clean, but `Requires` is also matched exhaustively one layer up, in the Tauri app itself — `cargo test -p wield-core` can't see that (different crate). Run, from the repo root:
 
 ```bash
-git add crates/wield-core/src/descriptor.rs crates/wield-core/src/executor.rs crates/wield-core/tests/executor_pipeline.rs
+cargo build
+```
+
+Expected: **fails to compile** with another E0004 at `apps/wield/src-tauri/src/capabilities.rs`, inside `is_available`. This function is what actually produces the palette's "greyed out with a reason" text (`ToolAvailability.reason`, shown directly in the UI) — a fourth independent site, missed for the same reason as `registry.rs`.
+
+There's also a related, non-compile-error gap in the same file worth fixing alongside it: `report()`'s loop that populates `CapabilitiesReport.binaries` (a diagnostics map of "which binaries are installed") only checks `if let Requires::Binary(binary) = &descriptor.requires` — a *direct* top-level match, so it silently misses any binary named inside a `Requires::All` (exactly `screen.ocr`'s shape). Not a compile error, so nothing would force this one — worth catching now rather than shipping a diagnostics view that quietly omits `tesseract`.
+
+In `apps/wield/src-tauri/src/capabilities.rs`, find:
+
+```rust
+/// Evaluate one descriptor requirement against startup capability data.
+pub fn is_available(
+    availability: &AvailabilityView,
+    requires: &Requires,
+) -> (bool, Option<String>) {
+    match requires {
+        Requires::None => (true, None),
+        Requires::Binary(binary) if availability.binaries.contains(binary) => (true, None),
+        Requires::Binary(binary) => (false, Some(format!("{binary} is not installed"))),
+        Requires::Portal { iface, min_ver } => match availability.portals.get(iface) {
+            Some(version) if version >= min_ver => (true, None),
+            Some(version) => (
+                false,
+                Some(format!(
+                    "the {iface} desktop portal is version {version}, but this tool needs version {min_ver}"
+                )),
+            ),
+            None => (
+                false,
+                Some(format!("the {iface} desktop portal is not available")),
+            ),
+        },
+    }
+}
+```
+
+Replace with (adding one `All` arm — blocks on and reports the first unmet entry, the same short-circuit order `wield-core`'s `check_requires` already uses, so the palette's reason text is consistent with the execution-time gate):
+
+```rust
+/// Evaluate one descriptor requirement against startup capability data.
+/// `All` reports its first unmet entry, same order as `wield-core`'s own
+/// `check_requires` - keeps this UI-facing reason consistent with the
+/// execution-time gate.
+pub fn is_available(
+    availability: &AvailabilityView,
+    requires: &Requires,
+) -> (bool, Option<String>) {
+    match requires {
+        Requires::None => (true, None),
+        Requires::Binary(binary) if availability.binaries.contains(binary) => (true, None),
+        Requires::Binary(binary) => (false, Some(format!("{binary} is not installed"))),
+        Requires::Portal { iface, min_ver } => match availability.portals.get(iface) {
+            Some(version) if version >= min_ver => (true, None),
+            Some(version) => (
+                false,
+                Some(format!(
+                    "the {iface} desktop portal is version {version}, but this tool needs version {min_ver}"
+                )),
+            ),
+            None => (
+                false,
+                Some(format!("the {iface} desktop portal is not available")),
+            ),
+        },
+        Requires::All(all) => all
+            .iter()
+            .map(|inner| is_available(availability, inner))
+            .find(|(available, _)| !available)
+            .unwrap_or((true, None)),
+    }
+}
+```
+
+Then find `report()`'s binary-collection loop:
+
+```rust
+            if let Requires::Binary(binary) = &descriptor.requires {
+                binaries.insert(binary.clone(), state.availability.binaries.contains(binary));
+            }
+```
+
+Replace with:
+
+```rust
+            for binary in binary_requirements(&descriptor.requires) {
+                binaries.insert(binary.clone(), state.availability.binaries.contains(binary));
+            }
+```
+
+And add this free function below `report()`:
+
+```rust
+/// Every `Binary` requirement named anywhere inside `requires`, including
+/// nested inside `All` - `report()`'s diagnostics map needs all of them,
+/// not just a direct top-level `Requires::Binary`.
+fn binary_requirements(requires: &Requires) -> Vec<&String> {
+    match requires {
+        Requires::Binary(binary) => vec![binary],
+        Requires::All(all) => all.iter().flat_map(binary_requirements).collect(),
+        _ => Vec::new(),
+    }
+}
+```
+
+This file has no existing tests (checked: no inline `#[cfg(test)]`, no `apps/wield/src-tauri/tests/` file covering it) — add one, matching `state.rs`'s own inline `#[cfg(test)] mod tests` convention (the established pattern in *this* crate, unlike `wield-core`'s separate `tests/*.rs` files):
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn availability_with(binaries: &[&str], portals: &[(&str, u32)]) -> AvailabilityView {
+        let mut view = AvailabilityView::default();
+        for binary in binaries {
+            view.binaries.insert((*binary).to_owned());
+        }
+        for (iface, version) in portals {
+            view.portals.insert((*iface).to_owned(), *version);
+        }
+        view
+    }
+
+    fn screen_ocr_requires() -> Requires {
+        Requires::All(vec![
+            Requires::Portal {
+                iface: "Screenshot".into(),
+                min_ver: 2,
+            },
+            Requires::Binary("tesseract".into()),
+        ])
+    }
+
+    #[test]
+    fn all_reports_the_first_unmet_entry() {
+        let (available, reason) = is_available(&availability_with(&[], &[]), &screen_ocr_requires());
+        assert!(!available);
+        assert_eq!(
+            reason.as_deref(),
+            Some("the Screenshot desktop portal is not available")
+        );
+    }
+
+    #[test]
+    fn all_is_available_only_when_every_entry_is() {
+        let view = availability_with(&["tesseract"], &[("Screenshot", 2)]);
+        let (available, reason) = is_available(&view, &screen_ocr_requires());
+        assert!(available);
+        assert!(reason.is_none());
+    }
+
+    #[test]
+    fn binary_requirements_collects_nested_entries() {
+        let names: Vec<&str> = binary_requirements(&screen_ocr_requires())
+            .into_iter()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(names, vec!["tesseract"]);
+    }
+}
+```
+
+Run: `cargo build` (from the repo root)
+Expected: builds cleanly.
+
+Run: `cargo test -p wield-app capabilities` (this crate's package name, confirmed in Task 5 later — filters to the three new tests)
+Expected: PASS.
+
+- [ ] **Step 8: Run the `executor_pipeline` tests once more to confirm**
+
+Run: `cargo test -p wield-core --test executor_pipeline`
+Expected: PASS, including the three tests from Step 1 and every pre-existing test in the file (the `None`/`Binary`/`Portal` behavior is unchanged, only relocated).
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add crates/wield-core/src/descriptor.rs crates/wield-core/src/executor.rs crates/wield-core/src/registry.rs crates/wield-core/tests/executor_pipeline.rs crates/wield-core/tests/registry.rs apps/wield/src-tauri/src/capabilities.rs
 git commit -m "wield-core: add Requires::All for tools needing more than one requirement"
 ```
 

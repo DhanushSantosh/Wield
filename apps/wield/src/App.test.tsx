@@ -362,6 +362,18 @@ test("clicking inside the card does not hide the palette", async () => {
   expect(hidePaletteMock).not.toHaveBeenCalled();
 });
 
+test("clicking the backdrop while an arg form is open does not hide the palette", async () => {
+  render(<App />);
+  await userEvent.click(await screen.findByText("Convert image"));
+  expect(screen.getByRole("heading", { name: "Convert image" })).toBeInTheDocument();
+  const backdrop = document.querySelector(".palette-backdrop") as HTMLElement;
+  fireEvent.mouseDown(backdrop);
+  expect(hidePaletteMock).not.toHaveBeenCalled();
+  // Escape remains the way out of this view.
+  fireEvent.keyDown(screen.getByRole("heading", { name: "Convert image" }), { key: "Escape" });
+  expect(await screen.findByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
+});
+
 test("the settings gear opens settings, and its close button returns to search", async () => {
   render(<App />);
   await userEvent.click(await screen.findByRole("button", { name: "Open settings" }));

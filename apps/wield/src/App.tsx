@@ -456,7 +456,19 @@ export default function App() {
         // proven reliable: this is exactly how clicking a result row
         // already worked) tells this handler whether it landed on the
         // backdrop or bubbled up from the card.
-        if (event.target === event.currentTarget) void hidePalette();
+        //
+        // Only live in the search view. A native <select>'s open dropdown
+        // list is rendered by GTK/WebKitGTK as its own native popup, not
+        // as in-DOM webview content - closing it can synthesize a click
+        // that lands on this backdrop, which would otherwise misfire a
+        // dismiss while a user is just picking an option in an arg form.
+        // Every other view (form/running/result/settings) already has its
+        // own working Escape path (ArgForm's own handler; the cancel-on-
+        // Escape effect; etc.) - gating this to search makes Escape the
+        // sole way out of those views, deliberately.
+        if (state.view.kind === "search" && event.target === event.currentTarget) {
+          void hidePalette();
+        }
       }}
     >
       <main className="app-shell" style={{ height: cardHeight }}>

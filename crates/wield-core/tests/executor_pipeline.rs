@@ -245,6 +245,81 @@ async fn missing_binary_is_unavailable() {
 }
 
 #[tokio::test]
+async fn all_requires_blocks_on_the_first_unmet_entry() {
+    let mut descriptor = convert_descriptor("nope-missing-binary");
+    descriptor.requires = Requires::All(vec![
+        Requires::Portal {
+            iface: "Screenshot".into(),
+            min_ver: 2,
+        },
+        Requires::Binary("nope-missing-binary".into()),
+    ]);
+    let mut view = wield_core::AvailabilityView::default();
+    view.portals.insert("Screenshot".into(), 2);
+    let executor = Executor::new(BinaryResolver::with_dirs(vec![])).with_availability(view);
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path("/tmp/x.raw".into()));
+    let (tx, _rx) = mpsc::channel(16);
+    let outcome = executor
+        .run(
+            ExecutionRequest { descriptor, args },
+            tx,
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(outcome, ToolOutcome::Unavailable { .. }));
+}
+
+#[tokio::test]
+async fn all_requires_met_runs_the_tool() {
+    let dir = tempfile::tempdir().unwrap();
+    support::write_stub_script(dir.path(), "cp-conv", "#!/bin/sh\ncat \"$1\" > \"$2\"\n");
+    let input = dir.path().join("photo.raw");
+    std::fs::write(&input, b"PIXELS").unwrap();
+
+    let mut descriptor = convert_descriptor("cp-conv");
+    descriptor.requires = Requires::All(vec![
+        Requires::Portal {
+            iface: "Screenshot".into(),
+            min_ver: 2,
+        },
+        Requires::Binary("cp-conv".into()),
+    ]);
+    let mut view = wield_core::AvailabilityView::default();
+    view.portals.insert("Screenshot".into(), 2);
+    let executor = Executor::new(BinaryResolver::with_dirs(vec![dir.path().to_path_buf()]))
+        .with_availability(view);
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path(input));
+    let (tx, _rx) = mpsc::channel(16);
+    let outcome = executor
+        .run(
+            ExecutionRequest { descriptor, args },
+            tx,
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(outcome, ToolOutcome::File { .. }));
+}
+
+#[test]
+fn probe_binaries_collects_a_binary_nested_inside_all() {
+    let dir = tempfile::tempdir().unwrap();
+    support::write_stub_script(dir.path(), "nested-bin", "#!/bin/sh\nexit 0\n");
+    let mut descriptor = convert_descriptor("nested-bin");
+    descriptor.requires = Requires::All(vec![
+        Requires::Portal {
+            iface: "Screenshot".into(),
+            min_ver: 2,
+        },
+        Requires::Binary("nested-bin".into()),
+    ]);
+    let resolver = BinaryResolver::with_dirs(vec![dir.path().to_path_buf()]);
+    let view = wield_core::AvailabilityView::probe_binaries(&resolver, &[descriptor]);
+    assert!(view.binaries.contains("nested-bin"));
+}
+
+#[tokio::test]
 async fn portal_capability_is_placeholder_failure() {
     let mut descriptor = convert_descriptor("sh");
     descriptor.requires = Requires::None;

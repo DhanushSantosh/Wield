@@ -125,8 +125,18 @@ pub enum ArgValueLiteral {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Requires {
     None,
-    Portal { iface: String, min_ver: u32 },
+    Portal {
+        iface: String,
+        min_ver: u32,
+    },
     Binary(String),
+    /// Every entry must be satisfied. Added for tools needing more than one
+    /// requirement at once (e.g. `screen.ocr`: the Screenshot portal *and*
+    /// the `tesseract` binary) — no existing single-valued `Requires` could
+    /// express that without leaving one half unable to proactively grey out
+    /// in the palette the way `AvailabilityView::probe_binaries` already
+    /// does for `Binary`.
+    All(Vec<Requires>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

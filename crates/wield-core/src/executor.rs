@@ -23,12 +23,7 @@ impl AvailabilityView {
     pub fn probe_binaries(resolver: &BinaryResolver, descriptors: &[Descriptor]) -> Self {
         let binaries = descriptors
             .iter()
-            .filter_map(|descriptor| match &descriptor.requires {
-                Requires::Binary(binary) if resolver.resolve(binary).is_some() => {
-                    Some(binary.clone())
-                }
-                _ => None,
-            })
+            .flat_map(|descriptor| available_binaries(&descriptor.requires, resolver))
             .collect();
         Self {
             binaries,
@@ -102,33 +97,12 @@ impl Executor {
             }
         };
 
-        match &request.descriptor.requires {
-            Requires::Binary(binary) if self.resolver.resolve(binary).is_none() => {
-                return unavailable_binary(binary);
-            }
-            Requires::Portal { iface, min_ver } => match self.availability.portals.get(iface) {
-                Some(version) if version >= min_ver => {}
-                Some(version) => {
-                    return ToolOutcome::Unavailable {
-                        reason: format!(
-                            "the {iface} desktop portal is version {version}, but this tool needs version {min_ver}"
-                        ),
-                        fix: Some(format!(
-                            "update your desktop environment to one that provides {iface} portal v{min_ver} or newer"
-                        )),
-                    };
-                }
-                None => {
-                    return ToolOutcome::Unavailable {
-                        reason: format!("the {iface} desktop portal is not available"),
-                        fix: Some(
-                            "this tool needs a desktop environment with XDG Desktop Portal support"
-                                .to_owned(),
-                        ),
-                    };
-                }
-            },
-            Requires::None | Requires::Binary(_) => {}
+        if let Some(outcome) = check_requires(
+            &request.descriptor.requires,
+            &self.resolver,
+            &self.availability.portals,
+        ) {
+            return outcome;
         }
 
         match &request.descriptor.capability {
@@ -442,6 +416,54 @@ fn unavailable_binary(binary: &str) -> ToolOutcome {
     ToolOutcome::Unavailable {
         reason: format!("{binary} is not installed"),
         fix: Some(format!("install {binary} or add it to your PATH")),
+    }
+}
+
+fn check_requires(
+    requires: &Requires,
+    resolver: &BinaryResolver,
+    portals: &HashMap<String, u32>,
+) -> Option<ToolOutcome> {
+    match requires {
+        Requires::None => None,
+        Requires::Binary(binary) => {
+            if resolver.resolve(binary).is_none() {
+                Some(unavailable_binary(binary))
+            } else {
+                None
+            }
+        }
+        Requires::Portal { iface, min_ver } => match portals.get(iface) {
+            Some(version) if version >= min_ver => None,
+            Some(version) => Some(ToolOutcome::Unavailable {
+                reason: format!(
+                    "the {iface} desktop portal is version {version}, but this tool needs version {min_ver}"
+                ),
+                fix: Some(format!(
+                    "update your desktop environment to one that provides {iface} portal v{min_ver} or newer"
+                )),
+            }),
+            None => Some(ToolOutcome::Unavailable {
+                reason: format!("the {iface} desktop portal is not available"),
+                fix: Some(
+                    "this tool needs a desktop environment with XDG Desktop Portal support".to_owned(),
+                ),
+            }),
+        },
+        Requires::All(all) => all
+            .iter()
+            .find_map(|inner| check_requires(inner, resolver, portals)),
+    }
+}
+
+fn available_binaries(requires: &Requires, resolver: &BinaryResolver) -> Vec<String> {
+    match requires {
+        Requires::Binary(binary) if resolver.resolve(binary).is_some() => vec![binary.clone()],
+        Requires::All(all) => all
+            .iter()
+            .flat_map(|inner| available_binaries(inner, resolver))
+            .collect(),
+        _ => Vec::new(),
     }
 }
 

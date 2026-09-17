@@ -23,8 +23,8 @@ jobs:
         run: |
           npm init -y >/dev/null 2>&1
           npm install @actions/github@9.1.1 @actions/core@3.0.1 >/dev/null 2>&1
-          cat > probe.js <<'SCRIPT'
-          const { getOctokit, context } = require('@actions/github');
+          cat > probe.mjs <<'SCRIPT'
+          import { getOctokit, context } from '@actions/github';
           (async () => {
             const github = getOctokit(process.env.GITHUB_TOKEN, { baseUrl: 'https://api.github.com' });
             try {
@@ -46,4 +46,4 @@ jobs:
             }
           })();
           SCRIPT
-          node probe.js
+          node probe.mjs

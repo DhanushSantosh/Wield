@@ -307,6 +307,21 @@ test("blur does not hide the palette when the setting is off", async () => {
   setBlurToHide(true);
 });
 
+test("blur does not hide the palette while an arg form is open", async () => {
+  render(<App />);
+  await screen.findByText("Pick a color");
+  await act(async () => selectToolHandler?.("image.convert"));
+  expect(await screen.findByRole("heading", { name: "Convert image" })).toBeInTheDocument();
+  // A native <select>'s open dropdown popup can fire a window blur event
+  // without the user ever leaving the app - the same reason the backdrop's
+  // click-outside-dismiss is gated to the search view only.
+  fireEvent(window, new Event("blur"));
+  expect(hidePaletteMock).not.toHaveBeenCalled();
+  // Escape remains the way out of this view.
+  fireEvent.keyDown(screen.getByRole("heading", { name: "Convert image" }), { key: "Escape" });
+  expect(await screen.findByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
+});
+
 test("a tray tool-selection event opens the form for an argument tool", async () => {
   render(<App />);
   await screen.findByText("Pick a color");
@@ -360,6 +375,18 @@ test("clicking inside the card does not hide the palette", async () => {
   render(<App />);
   await userEvent.click(await screen.findByRole("searchbox", { name: "Search tools" }));
   expect(hidePaletteMock).not.toHaveBeenCalled();
+});
+
+test("clicking the backdrop while an arg form is open does not hide the palette", async () => {
+  render(<App />);
+  await userEvent.click(await screen.findByText("Convert image"));
+  expect(screen.getByRole("heading", { name: "Convert image" })).toBeInTheDocument();
+  const backdrop = document.querySelector(".palette-backdrop") as HTMLElement;
+  fireEvent.mouseDown(backdrop);
+  expect(hidePaletteMock).not.toHaveBeenCalled();
+  // Escape remains the way out of this view.
+  fireEvent.keyDown(screen.getByRole("heading", { name: "Convert image" }), { key: "Escape" });
+  expect(await screen.findByRole("searchbox", { name: "Search tools" })).toBeInTheDocument();
 });
 
 test("the settings gear opens settings, and its close button returns to search", async () => {

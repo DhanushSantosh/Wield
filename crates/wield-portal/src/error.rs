@@ -51,3 +51,29 @@ impl From<zbus::Error> for PortalError {
         Self::Transport(error.to_string())
     }
 }
+
+impl From<ashpd::Error> for PortalError {
+    fn from(error: ashpd::Error) -> Self {
+        match error {
+            ashpd::Error::Response(ashpd::desktop::ResponseError::Cancelled) => Self::Cancelled,
+            other => Self::Transport(other.to_string()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_dismissed_response_maps_to_cancelled() {
+        let error = ashpd::Error::Response(ashpd::desktop::ResponseError::Cancelled);
+        assert!(matches!(PortalError::from(error), PortalError::Cancelled));
+    }
+
+    #[test]
+    fn any_other_ashpd_error_maps_to_transport() {
+        let error = ashpd::Error::NoResponse;
+        assert!(matches!(PortalError::from(error), PortalError::Transport(_)));
+    }
+}

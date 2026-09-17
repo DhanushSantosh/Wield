@@ -156,7 +156,7 @@ inline, is the one small addition this needs.
 Registered in `wield-portal/src/adapters/mod.rs`'s dispatch alongside
 `"screenshot.pick_color"`.
 
-### 3.3 Tray reflects state (`tray.rs`)
+### 3.3 Tray reflects state (`tray.rs` + `AppState`)
 
 `build_menu`'s per-tool loop special-cases `keep.awake`'s id to create a
 `CheckMenuItem` (initialized from `inhibit_toggle::is_active()`) instead of
@@ -167,13 +167,20 @@ current use case is exactly the kind of premature generalization this
 project has consistently avoided (M3a's `Requires::All` addition was the
 opposite case: real, immediate, multi-site need).
 
-After the palette or tray runs `keep.awake` and gets its `ToolOutcome`
-back, the app emits a small Tauri event (`"keep-awake://changed"`, carrying
-the new boolean from `inhibit_toggle::is_active()`) from the Tauri command
-that handles tool execution (`commands.rs`) — targeted to `keep.awake`'s id
-specifically, not a general per-tool-run broadcast. `tray.rs` listens for
-this event and calls `.set_checked(...)` on the `CheckMenuItem` handle it
-kept from building the menu.
+No Tauri event bus needed for the update path — `AppState` holds the
+`CheckMenuItem` handle directly (`tray_keep_awake_item:
+Mutex<Option<tauri::menu::CheckMenuItem<tauri::Wry>>>`, set once from
+`tray::build`, exactly mirroring the existing `hotkey_controller` field's
+shape: a handle for a portal-adjacent resource, created at startup,
+stored once, mutated later by direct calls). `run_tool_impl`
+(`commands.rs`) — which already receives `state: &AppState` and the
+tool's `id` directly, no new plumbing required — checks `id ==
+"keep.awake"` after running it and, if so, calls
+`state.refresh_tray_keep_awake(inhibit_toggle::is_active())`, which
+`.set_checked(...)`s the stored handle if present. Simpler than the event
+round-trip this section originally sketched, and more directly consistent
+with the one existing precedent this codebase already has for "a
+resource set once at startup, updated later via a direct method call."
 
 ### 3.4 Quit safety
 

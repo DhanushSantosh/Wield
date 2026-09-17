@@ -42,6 +42,7 @@ pub struct ExecutionRequest {
 pub struct Executor {
     resolver: BinaryResolver,
     portal: Option<Arc<dyn crate::portal::PortalRunner>>,
+    native: Option<Arc<dyn crate::native::NativeRunner>>,
     availability: AvailabilityView,
 }
 
@@ -50,6 +51,7 @@ impl std::fmt::Debug for Executor {
         f.debug_struct("Executor")
             .field("resolver", &self.resolver)
             .field("portal", &self.portal.is_some())
+            .field("native", &self.native.is_some())
             .field("availability", &self.availability)
             .finish()
     }
@@ -60,12 +62,18 @@ impl Executor {
         Self {
             resolver,
             portal: None,
+            native: None,
             availability: AvailabilityView::default(),
         }
     }
 
     pub fn with_portal(mut self, portal: Arc<dyn crate::portal::PortalRunner>) -> Self {
         self.portal = Some(portal);
+        self
+    }
+
+    pub fn with_native(mut self, native: Arc<dyn crate::native::NativeRunner>) -> Self {
+        self.native = Some(native);
         self
     }
 
@@ -118,10 +126,13 @@ impl Executor {
                     hint: None,
                 },
             },
-            Capability::Native { .. } => ToolOutcome::Failed {
-                stage: Stage::Native,
-                detail: "native execution is implemented in P4".to_owned(),
-                hint: None,
+            Capability::Native { id } => match &self.native {
+                Some(runner) => runner.run(&id.0, &effective, cancel).await,
+                None => ToolOutcome::Failed {
+                    stage: Stage::Native,
+                    detail: "this build has no native runner configured".to_owned(),
+                    hint: None,
+                },
             },
         }
     }

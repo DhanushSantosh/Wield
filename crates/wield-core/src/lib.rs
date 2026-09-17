@@ -1,8 +1,6 @@
 //! `wield-core` — the Wield tool descriptor model, argument validation,
-//! argv-template rendering, the `Command`-capability executor, and the tool
-//! registry.
-//!
-//! Native execution remains stubbed here; it lands in P4.
+//! argv-template rendering, the `Command`/`Portal`/`Native`-capability
+//! executor, and the tool registry.
 
 pub mod args;
 pub mod builder;
@@ -10,6 +8,7 @@ pub mod command;
 pub mod descriptor;
 pub mod error;
 pub mod executor;
+pub mod native;
 pub mod outcome;
 pub mod portal;
 pub mod registry;
@@ -26,6 +25,7 @@ pub use descriptor::{
 };
 pub use error::{CoreError, DescriptorError, ValidationError};
 pub use executor::{AvailabilityView, ExecutionRequest, Executor};
+pub use native::NativeRunner;
 pub use outcome::{Progress, Stage, ToolOutcome};
 pub use portal::PortalRunner;
 pub use registry::{Registry, RegistryError};

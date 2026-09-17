@@ -895,3 +895,36 @@ No conversion defect was found. A 10-or-more-page split was not run live; the
 known lexicographic-versus-numeric discovery-order gap is tracked explicitly in
 `docs/backlog.md`. The branch test process was stopped after verification and
 the user's installed Wield service was restored headlessly.
+
+## M3a: `screen.ocr`
+
+On 2026-09-17, live-verified `screen.ocr` against the rebuilt production Tauri
+binary and the real Hyprland Screenshot portal. The installed binary owned
+`io.github.DhanushSantosh.Wield`, the palette listed **Extract text from
+screen** as an available Capture tool, and selecting it opened the portal's
+real `slurp` region picker. Synthetic pointer and keyboard input plus `grim`
+captures were used to keep each interaction short and to inspect the rendered
+result without leaving the palette over the user's workspace.
+
+**Recognized text and clipboard:** selecting a region containing visible text
+returned a Text Value result with OCR output in the palette. Clicking **Copy
+value** placed the same recognized text on the Wayland clipboard; `wl-paste`
+independently read it back. This exercised the production descriptor, Native
+runner dispatch, Screenshot portal capture, Tesseract subprocess, Value result
+card, and clipboard action end to end.
+
+**Empty region:** selecting a blank region returned the visible failure
+`no text was found in the selected region`, with the accompanying retry hint,
+rather than a successful empty value.
+
+**Cancelled capture:** pressing Escape while the real `slurp` picker was
+active dismissed it. Wield returned to its normal search view without showing
+an error, confirming that a dismissed portal request is surfaced as
+`ToolOutcome::Cancelled`.
+
+The live baseline was Tesseract 5.5.3 with the `eng` and `osd` traineddata
+installed. `Requires::All` behavior was covered by the automated core,
+registry, and app-capability tests but was not separately walked through live:
+removing Tesseract or disabling the Screenshot portal mid-session would have
+disturbed the user's configured system, so proactive unavailability gating
+remains the explicit live-verification gap.

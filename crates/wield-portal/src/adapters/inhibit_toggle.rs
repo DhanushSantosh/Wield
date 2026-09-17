@@ -25,7 +25,10 @@ fn held() -> &'static Mutex<Option<Request<()>>> {
 /// to "not active" on the rare contended case is an acceptable
 /// display-only race, not a correctness issue worth a real lock wait for.
 pub fn is_active() -> bool {
-    held().try_lock().map(|guard| guard.is_some()).unwrap_or(false)
+    held()
+        .try_lock()
+        .map(|guard| guard.is_some())
+        .unwrap_or(false)
 }
 
 pub async fn toggle(_args: &ArgMap, cancel: CancellationToken) -> ToolOutcome {
@@ -45,7 +48,11 @@ pub async fn close_if_active() {
 /// The testable core: takes the held-state slot and the "start a new
 /// inhibit" future as parameters so tests can substitute a fake for the
 /// latter without touching the real portal or the shared static.
-async fn toggle_with<F>(held: &mut Option<Request<()>>, start: F, cancel: CancellationToken) -> ToolOutcome
+async fn toggle_with<F>(
+    held: &mut Option<Request<()>>,
+    start: F,
+    cancel: CancellationToken,
+) -> ToolOutcome
 where
     F: std::future::Future<Output = Result<Request<()>, PortalError>>,
 {

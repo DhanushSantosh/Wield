@@ -12,7 +12,10 @@ const CATEGORY_ORDER: [&str; 3] = ["Capture", "Convert", "Desktop"];
 /// the app's windows exist. Logs (rather than fails) if no SNI host is
 /// present — the spec asks for a one-time notice; a *visible* one is
 /// Preferences content (P6), so this is a log line for now.
-pub fn build(app: &AppHandle, tools: &[ToolSummary]) -> tauri::Result<Option<CheckMenuItem<tauri::Wry>>> {
+pub fn build(
+    app: &AppHandle,
+    tools: &[ToolSummary],
+) -> tauri::Result<Option<CheckMenuItem<tauri::Wry>>> {
     let (menu, keep_awake_item) = build_menu(app, tools)?;
 
     let icon = app.default_window_icon().cloned();

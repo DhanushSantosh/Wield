@@ -74,6 +74,9 @@ mod tests {
     #[test]
     fn any_other_ashpd_error_maps_to_transport() {
         let error = ashpd::Error::NoResponse;
-        assert!(matches!(PortalError::from(error), PortalError::Transport(_)));
+        assert!(matches!(
+            PortalError::from(error),
+            PortalError::Transport(_)
+        ));
     }
 }

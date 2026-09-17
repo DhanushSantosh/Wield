@@ -233,6 +233,7 @@ mod tests {
                 "pdf.compress",
                 "pdf.merge",
                 "pdf.split",
+                "screen.ocr",
                 "video.convert"
             ]
         );

@@ -11,6 +11,7 @@ pub mod image_convert;
 pub mod pdf_compress;
 pub mod pdf_merge;
 pub mod pdf_split;
+pub mod screen_ocr;
 pub mod video_convert;
 
 use wield_core::Registry;
@@ -40,6 +41,9 @@ pub fn builtin_registry() -> Registry {
     registry
         .register(pdf_split::descriptor())
         .expect("pdf.split registers");
+    registry
+        .register(screen_ocr::descriptor())
+        .expect("screen.ocr registers");
     registry
         .register(video_convert::descriptor())
         .expect("video.convert registers");

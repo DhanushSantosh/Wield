@@ -17,6 +17,34 @@ struct StubPortal {
     seen: std::sync::Mutex<Option<String>>,
 }
 
+fn native_descriptor(id: &str) -> Descriptor {
+    let mut descriptor = convert_descriptor("sh");
+    descriptor.requires = Requires::None;
+    descriptor.output = OutputSpec::Value(ValueKind::Text);
+    descriptor.capability = Capability::Native {
+        id: NativeId(id.into()),
+    };
+    descriptor
+}
+
+struct StubNative {
+    outcome: ToolOutcome,
+    seen: std::sync::Mutex<Option<String>>,
+}
+
+#[async_trait::async_trait]
+impl wield_core::NativeRunner for StubNative {
+    async fn run(
+        &self,
+        id: &str,
+        _args: &wield_core::ArgMap,
+        _cancel: CancellationToken,
+    ) -> ToolOutcome {
+        *self.seen.lock().unwrap() = Some(id.to_string());
+        self.outcome.clone()
+    }
+}
+
 #[async_trait::async_trait]
 impl PortalRunner for StubPortal {
     async fn run(
@@ -245,6 +273,81 @@ async fn missing_binary_is_unavailable() {
 }
 
 #[tokio::test]
+async fn all_requires_blocks_on_the_first_unmet_entry() {
+    let mut descriptor = convert_descriptor("nope-missing-binary");
+    descriptor.requires = Requires::All(vec![
+        Requires::Portal {
+            iface: "Screenshot".into(),
+            min_ver: 2,
+        },
+        Requires::Binary("nope-missing-binary".into()),
+    ]);
+    let mut view = wield_core::AvailabilityView::default();
+    view.portals.insert("Screenshot".into(), 2);
+    let executor = Executor::new(BinaryResolver::with_dirs(vec![])).with_availability(view);
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path("/tmp/x.raw".into()));
+    let (tx, _rx) = mpsc::channel(16);
+    let outcome = executor
+        .run(
+            ExecutionRequest { descriptor, args },
+            tx,
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(outcome, ToolOutcome::Unavailable { .. }));
+}
+
+#[tokio::test]
+async fn all_requires_met_runs_the_tool() {
+    let dir = tempfile::tempdir().unwrap();
+    support::write_stub_script(dir.path(), "cp-conv", "#!/bin/sh\ncat \"$1\" > \"$2\"\n");
+    let input = dir.path().join("photo.raw");
+    std::fs::write(&input, b"PIXELS").unwrap();
+
+    let mut descriptor = convert_descriptor("cp-conv");
+    descriptor.requires = Requires::All(vec![
+        Requires::Portal {
+            iface: "Screenshot".into(),
+            min_ver: 2,
+        },
+        Requires::Binary("cp-conv".into()),
+    ]);
+    let mut view = wield_core::AvailabilityView::default();
+    view.portals.insert("Screenshot".into(), 2);
+    let executor = Executor::new(BinaryResolver::with_dirs(vec![dir.path().to_path_buf()]))
+        .with_availability(view);
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path(input));
+    let (tx, _rx) = mpsc::channel(16);
+    let outcome = executor
+        .run(
+            ExecutionRequest { descriptor, args },
+            tx,
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(outcome, ToolOutcome::File { .. }));
+}
+
+#[test]
+fn probe_binaries_collects_a_binary_nested_inside_all() {
+    let dir = tempfile::tempdir().unwrap();
+    support::write_stub_script(dir.path(), "nested-bin", "#!/bin/sh\nexit 0\n");
+    let mut descriptor = convert_descriptor("nested-bin");
+    descriptor.requires = Requires::All(vec![
+        Requires::Portal {
+            iface: "Screenshot".into(),
+            min_ver: 2,
+        },
+        Requires::Binary("nested-bin".into()),
+    ]);
+    let resolver = BinaryResolver::with_dirs(vec![dir.path().to_path_buf()]);
+    let view = wield_core::AvailabilityView::probe_binaries(&resolver, &[descriptor]);
+    assert!(view.binaries.contains("nested-bin"));
+}
+
+#[tokio::test]
 async fn portal_capability_is_placeholder_failure() {
     let mut descriptor = convert_descriptor("sh");
     descriptor.requires = Requires::None;
@@ -300,6 +403,58 @@ async fn injected_portal_runner_receives_the_adapter_key() {
         stub.seen.lock().unwrap().as_deref(),
         Some("screenshot.pick_color")
     );
+}
+
+#[tokio::test]
+async fn native_capability_with_no_runner_configured_is_failed() {
+    let executor = Executor::new(BinaryResolver::from_env());
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path("/tmp/x".into()));
+    let (tx, _rx) = mpsc::channel(16);
+    let outcome = executor
+        .run(
+            ExecutionRequest {
+                descriptor: native_descriptor("screen.ocr"),
+                args,
+            },
+            tx,
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(
+        outcome,
+        ToolOutcome::Failed {
+            stage: Stage::Native,
+            ..
+        }
+    ));
+}
+
+#[tokio::test]
+async fn injected_native_runner_receives_the_native_id() {
+    let stub = Arc::new(StubNative {
+        outcome: ToolOutcome::Value {
+            kind: ValueKind::Text,
+            data: "recognized text".into(),
+        },
+        seen: std::sync::Mutex::new(None),
+    });
+    let executor = Executor::new(BinaryResolver::from_env()).with_native(stub.clone());
+    let mut args = BTreeMap::new();
+    args.insert("input".to_string(), ArgValue::Path("/tmp/x".into()));
+    let (tx, _rx) = mpsc::channel(16);
+    let outcome = executor
+        .run(
+            ExecutionRequest {
+                descriptor: native_descriptor("screen.ocr"),
+                args,
+            },
+            tx,
+            CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(outcome, ToolOutcome::Value { .. }));
+    assert_eq!(stub.seen.lock().unwrap().as_deref(), Some("screen.ocr"));
 }
 
 #[tokio::test]

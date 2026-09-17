@@ -105,6 +105,37 @@ fn available_filters_on_binaries() {
 }
 
 #[test]
+fn available_requires_every_entry_of_an_all_requirement() {
+    let mut r = Registry::new();
+    let mut portal_and_binary = cmd_tool("screen.ocr", "tesseract", &[]);
+    portal_and_binary.requires = Requires::All(vec![
+        Requires::Portal {
+            iface: "Screenshot".into(),
+            min_ver: 2,
+        },
+        Requires::Binary("tesseract".into()),
+    ]);
+    r.register(portal_and_binary).unwrap();
+
+    let mut view = AvailabilityView {
+        binaries: Default::default(),
+        portals: Default::default(),
+    };
+    view.binaries.insert("tesseract".into());
+    // Portal missing from `view.portals` — only one of the two `All` entries is met.
+    assert!(r.available(&view).is_empty());
+
+    view.portals.insert("Screenshot".into(), 2);
+    // Now both are met.
+    let avail: Vec<_> = r
+        .available(&view)
+        .iter()
+        .map(|d| d.id.as_ref().to_string())
+        .collect();
+    assert_eq!(avail, vec!["screen.ocr"]);
+}
+
+#[test]
 fn snapshot_is_deterministic() {
     let mut a = Registry::new();
     a.register(cmd_tool("b.two", "x", &[])).unwrap();

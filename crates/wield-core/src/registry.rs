@@ -119,14 +119,7 @@ impl Registry {
     pub fn available<'a>(&'a self, view: &AvailabilityView) -> Vec<&'a Descriptor> {
         self.tools
             .iter()
-            .filter(|tool| match &tool.requires {
-                Requires::None => true,
-                Requires::Binary(binary) => view.binaries.contains(binary),
-                Requires::Portal { iface, min_ver } => view
-                    .portals
-                    .get(iface)
-                    .is_some_and(|version| version >= min_ver),
-            })
+            .filter(|tool| requires_satisfied(&tool.requires, view))
             .collect()
     }
 
@@ -136,5 +129,19 @@ impl Registry {
         let mut sorted = self.tools.clone();
         sorted.sort_by(|left, right| left.id.as_ref().cmp(right.id.as_ref()));
         serde_json::to_string_pretty(&sorted).expect("descriptors serialize")
+    }
+}
+
+/// `All` requires every nested requirement to hold; every other variant is
+/// exactly `Registry::available`'s original per-variant check, unchanged.
+fn requires_satisfied(requires: &Requires, view: &AvailabilityView) -> bool {
+    match requires {
+        Requires::None => true,
+        Requires::Binary(binary) => view.binaries.contains(binary),
+        Requires::Portal { iface, min_ver } => view
+            .portals
+            .get(iface)
+            .is_some_and(|version| version >= min_ver),
+        Requires::All(all) => all.iter().all(|inner| requires_satisfied(inner, view)),
     }
 }

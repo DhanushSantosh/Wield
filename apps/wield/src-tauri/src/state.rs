@@ -56,6 +56,7 @@ impl AppState {
         wield_portal::probe().await.apply_to(&mut availability);
         let executor = Executor::new(resolver)
             .with_portal(Arc::new(wield_portal::PortalAdapterRunner))
+            .with_native(Arc::new(wield_native::NativeToolRunner))
             .with_availability(availability.clone());
         Self {
             registry,
@@ -128,6 +129,7 @@ impl AppState {
         let availability = AvailabilityView::probe_binaries(&resolver, registry.list());
         let executor = Executor::new(resolver)
             .with_portal(Arc::new(wield_portal::PortalAdapterRunner))
+            .with_native(Arc::new(wield_native::NativeToolRunner))
             .with_availability(availability.clone());
         Self {
             registry,
@@ -170,6 +172,7 @@ mod tests {
         let state = AppState::build().await;
         assert!(state.registry.get("image.convert").is_some());
         assert!(state.registry.get("color.pick").is_some());
+        assert!(state.registry.get("screen.ocr").is_some());
     }
 
     fn empty_state() -> AppState {

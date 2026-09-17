@@ -42,14 +42,20 @@ jobs:
 
       - run: npm ci
 
-      - uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build the AppImage
+        uses: tauri-apps/tauri-action@v1
         with:
           projectPath: apps/wield
-          tagName: ${{ github.ref_name }}
-          releaseName: "Wield ${{ github.ref_name }}"
-          releaseBody: "See the AppImage below to download and run this version."
-          releaseDraft: true
-          prerelease: false
           args: --bundles appimage
+
+      - name: Create draft release and attach the AppImage
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          appimage=$(find target/release/bundle/appimage -name '*.AppImage')
+          gh release create "${{ github.ref_name }}" \
+            --title "Wield ${{ github.ref_name }}" \
+            --notes "See the AppImage below to download and run this version." \
+            --draft \
+            "$appimage"

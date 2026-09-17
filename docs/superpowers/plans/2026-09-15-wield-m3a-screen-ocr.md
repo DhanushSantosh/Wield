@@ -366,12 +366,12 @@ fn available_requires_every_entry_of_an_all_requirement() {
 Run: `cargo test -p wield-core`
 Expected: PASS, everything — this is the point where the whole crate (not just `executor_pipeline.rs`) compiles and tests clean with `Requires::All` fully handled everywhere it's matched.
 
-- [ ] **Step 7: Run `cargo build` from the repo root and fix the fourth site it surfaces**
+- [ ] **Step 7: Run `cargo build -p wield-app` and fix the fourth site it surfaces**
 
-`wield-core` alone now compiles clean, but `Requires` is also matched exhaustively one layer up, in the Tauri app itself — `cargo test -p wield-core` can't see that (different crate). Run, from the repo root:
+`wield-core` alone now compiles clean, but `Requires` is also matched exhaustively one layer up, in the Tauri app itself. Plain `cargo build` from the repo root will **not** catch this — `apps/wield/src-tauri` is a workspace `member` but deliberately excluded from `default-members` (a bare `cargo build` only builds default-members), confirmed live. Build the app crate explicitly instead:
 
 ```bash
-cargo build
+cargo build -p wield-app
 ```
 
 Expected: **fails to compile** with another E0004 at `apps/wield/src-tauri/src/capabilities.rs`, inside `is_available`. This function is what actually produces the palette's "greyed out with a reason" text (`ToolAvailability.reason`, shown directly in the UI) — a fourth independent site, missed for the same reason as `registry.rs`.
@@ -523,7 +523,11 @@ mod tests {
 
     #[test]
     fn binary_requirements_collects_nested_entries() {
-        let names: Vec<&str> = binary_requirements(&screen_ocr_requires())
+        // Bind first, not `binary_requirements(&screen_ocr_requires())` inline —
+        // the inline form borrows into a temporary that's dropped at the end
+        // of the statement (E0716).
+        let requires = screen_ocr_requires();
+        let names: Vec<&str> = binary_requirements(&requires)
             .into_iter()
             .map(String::as_str)
             .collect();
@@ -532,7 +536,7 @@ mod tests {
 }
 ```
 
-Run: `cargo build` (from the repo root)
+Run: `cargo build -p wield-app`
 Expected: builds cleanly.
 
 Run: `cargo test -p wield-app capabilities` (this crate's package name, confirmed in Task 5 later — filters to the three new tests)
@@ -984,7 +988,7 @@ git commit -m "wield-native: new crate scaffold for Native-capability tools"
 - Modify: `crates/wield-native/src/tools/mod.rs` (add `pub mod screen_ocr;`)
 
 **Interfaces:**
-- Consumes: `wield_portal::PortalError` (its `Display`/`into_outcome`), `wield_core::command::{CommandRunner, CommandResult, RunSpec}`, `wield_core::descriptor::{ProgressSpec, SuccessSpec}`, `wield_core::outcome::{Stage, ToolOutcome, ValueKind}`, `wield_core::ArgMap`.
+- Consumes: `wield_portal::PortalError` (its `Display`/`into_outcome`), `wield_core::command::{CommandRunner, CommandResult, RunSpec}`, `wield_core::descriptor::{ProgressSpec, SuccessSpec}`, `wield_core::outcome::{Stage, ToolOutcome}`, `wield_core::ValueKind` (re-exported at the crate root — it's defined in `descriptor.rs`, not `outcome.rs`, so `wield_core::outcome::ValueKind` doesn't exist), `wield_core::ArgMap`.
 - Produces: `pub async fn run(args: &ArgMap, cancel: CancellationToken) -> ToolOutcome` — the function Task 5 wires into `NativeToolRunner`'s dispatch.
 
 - [ ] **Step 1: Write the failing tests**
@@ -997,7 +1001,7 @@ Create `crates/wield-native/src/tools/screen_ocr.rs` with just its test module f
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wield_core::outcome::{Stage, ToolOutcome, ValueKind};
+    use wield_core::{Stage, ToolOutcome, ValueKind};
     use wield_portal::PortalError;
 
     #[tokio::test]
@@ -1106,7 +1110,8 @@ use tokio_util::sync::CancellationToken;
 use wield_core::args::ArgMap;
 use wield_core::command::{CommandResult, CommandRunner, RunSpec};
 use wield_core::descriptor::{ProgressSpec, SuccessSpec};
-use wield_core::outcome::{Stage, ToolOutcome, ValueKind};
+use wield_core::outcome::{Stage, ToolOutcome};
+use wield_core::ValueKind;
 use wield_portal::PortalError;
 
 const TESSERACT_TIMEOUT_SECS: u64 = 30;
@@ -1423,7 +1428,12 @@ Expected: PASS, including the existing `build_produces_the_builtin_registry` tes
 
 - [ ] **Step 7: Run the whole workspace's tests**
 
-Run: `cargo test` (from the repo root)
+Plain `cargo test` only covers `default-members`, which excludes `apps/wield/src-tauri` (confirmed live during Task 1) — use `--workspace` explicitly so nothing is silently skipped:
+
+```bash
+cargo test --workspace
+```
+
 Expected: PASS, everything — this is the first point where all five crates (`wield-core`, `wield-native`, `wield-portal`, `wield-tools`, `apps/wield/src-tauri`) build and test together with `screen.ocr` fully wired.
 
 - [ ] **Step 8: Commit**

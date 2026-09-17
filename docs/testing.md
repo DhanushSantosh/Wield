@@ -928,3 +928,56 @@ registry, and app-capability tests but was not separately walked through live:
 removing Tesseract or disabling the Screenshot portal mid-session would have
 disturbed the user's configured system, so proactive unavailability gating
 remains the explicit live-verification gap.
+
+## M3b: `keep.awake`
+
+On 2026-09-17, live-verified `keep.awake` against the rebuilt production
+Tauri binary and the real `Inhibit` desktop portal, closing out M3. Rather
+than driving the palette via computer-use (unreliable for this app's own
+layer-shell surface, per the project's standing findings), verification used
+the real D-Bus surfaces directly: `RunTool` on `io.github.DhanushSantosh.Wield`
+for the same path the palette itself uses, and the tray's own `DBusMenu`
+`GetLayout`/`Event` methods (found by querying `org.kde.StatusNotifierWatcher`
+for Wield's registered item) for the same path a real tray click uses — both
+are the actual production surfaces, not test doubles.
+
+**Toggle on/off, tray reflects it:** running `keep.awake` returned a `Report`
+outcome (never `Value` — no stray "Copy" button on a status line) reading
+"Turned on - your screen won't sleep or lock until you toggle this off
+again." A direct `GetLayout` query on the tray's checkbox item confirmed
+`toggle-type: checkmark`, `toggle-state` flipping `0 → 1`. Running it again
+returned "Turned off - normal sleep and screensaver behavior is restored.",
+with `toggle-state` flipping back `1 → 0` — confirmed via the tray's real
+D-Bus menu state, not a screenshot.
+
+**The `Inhibit()` call genuinely reaches the portal — with a real, host-level
+limitation discovered along the way:** `journalctl` on the main
+`xdg-desktop-portal` process logged, on every `Inhibit()` call during this
+session: `"A backend call failed: Inhibiting other than idle not supported"`.
+`keep.awake` requests `InhibitFlags::Idle | InhibitFlags::Suspend` together
+(the portable, correct request — other backends, e.g. GNOME's, honor both);
+`xdg-desktop-portal-hyprland`'s own backend only honors `Idle`, silently
+declining `Suspend` without surfacing it as an error to the caller (the
+overall `Inhibit()` call still succeeds and returns a valid `Request`). In
+practice, on this Hyprland setup, `keep.awake` reliably prevents idle/
+screensaver lock but does **not** guarantee preventing an actual system
+suspend (e.g. a laptop lid close, or a timeout-based suspend policy outside
+the idle daemon's own control). Not a Wield bug — an
+`xdg-desktop-portal-hyprland` backend limitation, tracked in
+`docs/backlog.md` rather than silently assumed away.
+
+**Quit safety:** toggled `keep.awake` on (confirmed via the tray's
+`toggle-state`), then triggered the tray's real "Quit" item through the exact
+`DBusMenu` `Event(id, "clicked", ...)` call a real click sends. The process
+exited cleanly. A fresh relaunch's tray checkbox started unchecked, as
+expected (state is process-local, never persisted). The close call itself is
+spawned fire-and-forget rather than awaited before `app.exit(0)` (documented
+in the code as a deliberate best-effort tradeoff), so this confirms the
+mechanism runs without error on a normal quit; it doesn't independently prove
+the close reached the portal before the process fully exited — the backend
+logs no explicit "closed" event to check against either way.
+
+The live baseline was `Inhibit` portal v3 via `xdg-desktop-portal-hyprland`.
+A hard crash or `kill -9` while active was not tested (would have genuinely
+left the dev machine's idle-inhibit stuck) — this is the accepted,
+documented gap from the design phase, not a new one found here.

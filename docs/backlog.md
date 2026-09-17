@@ -96,6 +96,26 @@ for the milestone plan (M1–M5).
   current Wayland compositors, not a Wield-specific gap. Owner decision:
   accept the two-click reality for now; revisit only if Hyprland or
   `gtk-layer-shell` fix their end.
+- **`keep.awake` doesn't prevent actual system suspend on Hyprland, only
+  idle/screensaver lock.** Live-verified (2026-09-17): `keep.awake` requests
+  `InhibitFlags::Idle | InhibitFlags::Suspend` together, the portable, correct
+  request per the real `Inhibit` portal spec. `xdg-desktop-portal-hyprland`'s
+  own backend only honors `Idle` - every `Inhibit()` call logs `"A backend
+  call failed: Inhibiting other than idle not supported"` on the main
+  `xdg-desktop-portal` process, though the overall call still succeeds and
+  returns a valid `Request`, so this fails silently from the caller's side.
+  Not a Wield gap - an `xdg-desktop-portal-hyprland` backend limitation.
+  Full write-up: `docs/testing.md`'s "M3b: `keep.awake`" section.
+- **A hard crash or `kill -9` of Wield while `keep.awake` is active leaves
+  the inhibitor held, with no way to release it short of logging out or
+  restarting the session.** Verified against the real XDG portal spec during
+  M3b's design (2026-09-17): `org.freedesktop.portal.Inhibit`'s `Inhibit()`
+  call has no auto-release on connection loss - release is
+  `Request.Close()` on the specific handle it returned, and nothing calls
+  that on an unclean exit. The tray's Quit item does close it on a normal
+  quit (`docs/testing.md`'s M3b section verifies this), which covers the
+  common case; a crash or force-kill bypasses that path entirely. Inherent
+  to the portal's own design, not something client code can close.
 
 ## Converter tooling (M2)
 

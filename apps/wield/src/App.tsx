@@ -301,11 +301,21 @@ export default function App() {
 
   useEffect(() => {
     const onBlur = () => {
-      if (getBlurToHide()) void hidePalette();
+      // Only live in the search view, for the same reason the backdrop's
+      // click-outside-dismiss is gated the same way (see below): a native
+      // <select>'s open dropdown list is rendered by GTK/WebKitGTK as its
+      // own native popup, and opening one can fire a `blur` event on this
+      // window even though the user never left the app - they're still
+      // mid-interaction with a form control. Losing focus to a genuinely
+      // different application while a form/running/result/settings view is
+      // showing already has a reliable way out (Escape, or the tray) - this
+      // gate only removes auto-hide-on-blur for those views, it doesn't
+      // remove any way to dismiss.
+      if (state.view.kind === "search" && getBlurToHide()) void hidePalette();
     };
     window.addEventListener("blur", onBlur);
     return () => window.removeEventListener("blur", onBlur);
-  }, []);
+  }, [state.view]);
 
   const startRun = useCallback(
     (tool: ToolSummary, values: Record<string, unknown>, viaRunAgain: boolean) => {

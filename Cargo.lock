@@ -4676,6 +4676,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "wield-native"
+version = "0.1.0"
+dependencies = [
+ "ashpd",
+ "async-trait",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "url",
+ "wield-core",
+ "wield-portal",
+]
+
+[[package]]
 name = "wield-portal"
 version = "0.1.0"
 dependencies = [

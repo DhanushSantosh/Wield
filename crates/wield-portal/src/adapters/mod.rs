@@ -1,5 +1,6 @@
 //! Named portal adapters.
 
+pub mod inhibit_toggle;
 pub mod pick_color;
 
 use tokio_util::sync::CancellationToken;
@@ -12,6 +13,7 @@ pub(crate) async fn dispatch(
     cancel: CancellationToken,
 ) -> ToolOutcome {
     match adapter {
+        "inhibit.toggle" => inhibit_toggle::toggle(args, cancel).await,
         "screenshot.pick_color" => pick_color::pick_color(args, cancel).await,
         other => ToolOutcome::Failed {
             stage: Stage::Portal,

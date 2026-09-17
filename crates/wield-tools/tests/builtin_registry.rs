@@ -335,6 +335,7 @@ fn registry_has_exactly_the_expected_builtins() {
             "color.pick",
             "document.convert",
             "image.convert",
+            "keep.awake",
             "pdf.compress",
             "pdf.merge",
             "pdf.split",

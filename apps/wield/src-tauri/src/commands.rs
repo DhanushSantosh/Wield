@@ -4,6 +4,12 @@ use crate::state::AppState;
 use tokio_util::sync::CancellationToken;
 use wield_core::{ArgMap, ArgType, ArgValue, ExecutionRequest, ToolOutcome};
 
+/// Thin re-export so `tray.rs` doesn't need its own `wield_portal` import
+/// just for this one query.
+pub fn keep_awake_is_active() -> bool {
+    wield_portal::adapters::inhibit_toggle::is_active()
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ToolSummary {
     pub id: String,
@@ -148,6 +154,9 @@ pub async fn run_tool_impl(
         .await;
     let _ = forward.await;
     state.take_run(&run_id);
+    if id == "keep.awake" {
+        state.refresh_tray_keep_awake(wield_portal::adapters::inhibit_toggle::is_active());
+    }
     tracing::info!(
         tool_id = id,
         elapsed_ms = started.elapsed().as_millis() as u64,
@@ -230,6 +239,7 @@ mod tests {
                 "color.pick",
                 "document.convert",
                 "image.convert",
+                "keep.awake",
                 "pdf.compress",
                 "pdf.merge",
                 "pdf.split",

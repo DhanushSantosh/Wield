@@ -45,6 +45,11 @@ pub struct AppState {
     /// Set once the startup `GlobalShortcuts` bind resolves to `Bound`; `None`
     /// otherwise (nothing to reconfigure, or the bind hasn't finished yet).
     hotkey_controller: Mutex<Option<wield_portal::global_shortcuts::HotkeyController>>,
+    /// The tray's "Keep awake" checkbox item, if `keep.awake` is a
+    /// registered tool and the tray built successfully. `None` when no SNI
+    /// host is present (the tray never appears) - same degrade-gracefully
+    /// shape `hotkey_controller` already has.
+    tray_keep_awake_item: Mutex<Option<tauri::menu::CheckMenuItem<tauri::Wry>>>,
 }
 
 impl AppState {
@@ -65,6 +70,7 @@ impl AppState {
             runs: Mutex::new(HashMap::new()),
             hotkey: Mutex::new(HotkeyState::Pending),
             hotkey_controller: Mutex::new(None),
+            tray_keep_awake_item: Mutex::new(None),
         }
     }
 
@@ -84,6 +90,28 @@ impl AppState {
             .hotkey_controller
             .lock()
             .expect("hotkey controller lock") = controller;
+    }
+
+    pub fn set_tray_keep_awake_item(&self, item: Option<tauri::menu::CheckMenuItem<tauri::Wry>>) {
+        *self
+            .tray_keep_awake_item
+            .lock()
+            .expect("tray keep-awake item lock") = item;
+    }
+
+    /// Reflects `active` on the tray's "Keep awake" checkbox, if the tray
+    /// built one. A missing item (no SNI host, or `keep.awake` wasn't in
+    /// the registered tools) is a silent no-op - there's nothing to
+    /// update.
+    pub fn refresh_tray_keep_awake(&self, active: bool) {
+        if let Some(item) = self
+            .tray_keep_awake_item
+            .lock()
+            .expect("tray keep-awake item lock")
+            .as_ref()
+        {
+            let _ = item.set_checked(active);
+        }
     }
 
     /// Opens the desktop environment's shortcut-configuration UI so the user
@@ -138,6 +166,7 @@ impl AppState {
             runs: Mutex::new(HashMap::new()),
             hotkey: Mutex::new(HotkeyState::Pending),
             hotkey_controller: Mutex::new(None),
+            tray_keep_awake_item: Mutex::new(None),
         }
     }
 
@@ -183,7 +212,21 @@ mod tests {
             runs: std::sync::Mutex::new(std::collections::HashMap::new()),
             hotkey: std::sync::Mutex::new(HotkeyState::Pending),
             hotkey_controller: std::sync::Mutex::new(None),
+            tray_keep_awake_item: std::sync::Mutex::new(None),
         }
+    }
+
+    #[test]
+    fn refresh_tray_keep_awake_is_a_no_op_with_nothing_set() {
+        // `CheckMenuItem<tauri::Wry>` can't be constructed in any test
+        // environment (`tauri::test::mock_app()` only produces
+        // `CheckMenuItem<MockRuntime>`, a different type; a real `Wry` item
+        // needs an actual running Tauri app). This is the only branch of
+        // `refresh_tray_keep_awake` unit-testable in isolation - the
+        // `Some(item)` branch is verified live instead (Task 6).
+        let state = empty_state();
+        state.refresh_tray_keep_awake(true);
+        state.refresh_tray_keep_awake(false);
     }
 
     #[test]

@@ -8,6 +8,7 @@ pub mod audio_extract;
 pub mod color_pick;
 pub mod document_convert;
 pub mod image_convert;
+pub mod keep_awake;
 pub mod pdf_compress;
 pub mod pdf_merge;
 pub mod pdf_split;
@@ -32,6 +33,9 @@ pub fn builtin_registry() -> Registry {
     registry
         .register(image_convert::descriptor())
         .expect("image.convert registers");
+    registry
+        .register(keep_awake::descriptor())
+        .expect("keep.awake registers");
     registry
         .register(pdf_compress::descriptor())
         .expect("pdf.compress registers");

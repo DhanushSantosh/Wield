@@ -13,15 +13,28 @@
   Tauri's own AppImage distribution docs for this exact warning.
 - `tauri.conf.json`'s `bundle.targets` includes `"appimage"`; `bundle.icon`
   points at `icons/icon.png` (the same placeholder icon tracked below, not
-  replaced by this pipeline).
-- `linuxdeploy` (Tauri's underlying AppImage tool) has an open, unresolved
-  upstream report of failing specifically in GitHub Actions CI
+  replaced by this pipeline). **The icon must be genuinely square** —
+  Tauri's bundler panics outright (`couldn't find a square icon to use as
+  AppImage icon`) if it isn't. Found live: the placeholder was 815×813, two
+  pixels off, which was enough to fail the build entirely.
+- The job needs `permissions: contents: write` — GitHub's own default
+  `GITHUB_TOKEN` permission for this repo is read-only, and `tauri-action`
+  needs to create/update a release. Found live (`Resource not accessible by
+  integration`), not assumed; without this the bundle itself succeeds but
+  the release-creation step fails.
+- `linuxdeploy` (Tauri's underlying AppImage tool) has an open upstream
+  report of failing specifically in GitHub Actions CI
   ([tauri-apps/tauri#14796](https://github.com/tauri-apps/tauri/issues/14796)).
-  If a future release run hits this, the fallback is dropping `tauri-action`'s
-  bundling step for a hand-rolled sequence in the same job: build the plain
-  binary (`npm run build -w apps/wield -- --no-bundle`), invoke `linuxdeploy`
-  and `appimagetool` directly as separate debuggable steps, then
-  `gh release create`/`gh release upload` to attach the result.
+  **Live-verified this does not affect this pipeline** — the actual bundling
+  step (`linuxdeploy` + the AppImage plugin, downloaded fresh by Tauri's
+  bundler) completed successfully on `ubuntu-22.04` in this repo's CI; the
+  two real failures hit instead were the icon and permissions issues above,
+  both now fixed. If a future run somehow does hit the same failure that
+  issue describes, the fallback is dropping `tauri-action`'s bundling step
+  for a hand-rolled sequence in the same job: build the plain binary
+  (`npm run build -w apps/wield -- --no-bundle`), invoke `linuxdeploy` and
+  `appimagetool` directly as separate debuggable steps, then `gh release
+  create`/`gh release upload` to attach the result.
 - Converter binaries (ImageMagick, ffmpeg, pandoc, qpdf/Ghostscript,
   Tesseract, LibreOffice) are **not** bundled into the AppImage — every
   `Command`-capability tool reports `Unavailable` inside it today. This is

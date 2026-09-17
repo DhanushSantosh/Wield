@@ -11,20 +11,39 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Probe GITHUB_TOKEN release-creation scope
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Replicate tauri-action's exact createRelease call via @actions/github
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "=== token scope headers ==="
-          curl -sI -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/${{ github.repository }} | grep -i "x-oauth-scopes\|x-accepted-oauth-scopes\|x-github-media-type\|github-authentication-token-expiration" || true
-          echo "=== attempting direct release creation via gh api, matching tauri-action's exact param shape ==="
-          gh api repos/${{ github.repository }}/releases \
-            -f tag_name="${{ github.ref_name }}" \
-            -f name="diag" \
-            -f body="See the AppImage below to download and run this version." \
-            -f target_commitish="${{ github.sha }}" \
-            -F draft=true \
-            -F prerelease=false \
-            -F generate_release_notes=false \
-            --method POST || echo "FAILED with exit $?"
+          npm init -y >/dev/null 2>&1
+          npm install @actions/github@9.1.1 @actions/core@3.0.1 >/dev/null 2>&1
+          cat > probe.js <<'SCRIPT'
+          const { getOctokit, context } = require('@actions/github');
+          (async () => {
+            const github = getOctokit(process.env.GITHUB_TOKEN, { baseUrl: 'https://api.github.com' });
+            try {
+              const res = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: context.ref.replace('refs/tags/', ''),
+                name: 'diag',
+                body: 'See the AppImage below to download and run this version.',
+                draft: true,
+                prerelease: false,
+                target_commitish: context.sha,
+                generate_release_notes: false,
+              });
+              console.log('SUCCESS', res.status, res.data.html_url);
+            } catch (err) {
+              console.log('FAILED', err.status, err.message);
+              console.log(JSON.stringify(err.response?.headers ?? {}, null, 2));
+            }
+          })();
+          SCRIPT
+          node probe.js

@@ -66,6 +66,36 @@ for the milestone plan (M1–M5).
   scoped out as low-value versus the same-monitor case that matters most).
   Escape or the tray remain reliable there. Full writeup:
   `docs/testing.md`'s "Click-away-to-dismiss" section.
+- **The window behind the palette can't be interacted with while Wield is
+  open** — clicking it dismisses Wield first, then needs a second click on
+  the now-visible target; there's no way to reach it in one action.
+  Researched properly (2026-09-15), not just assumed: the standard Wayland
+  mechanism for this (`wl_surface.set_input_region`, paired with
+  `KeyboardMode::Exclusive` for the interactive area) is real and works
+  correctly on sway and niri, confirmed via a live Hyprland discussion
+  ([hyprwm/Hyprland#14136](https://github.com/hyprwm/Hyprland/discussions/14136)
+  — same bug as the cross-monitor gap above) — but Hyprland specifically
+  ignores input regions on exclusive layer surfaces, and the discussion is
+  still open with zero replies. Separately, `gtk-layer-shell` (the library
+  `layer_shell.rs` is built on) has no input-region API at all
+  ([wmww/gtk-layer-shell#30](https://github.com/wmww/gtk-layer-shell/issues/30))
+  — GDK's Wayland backend only syncs input regions for windows mapped
+  through GTK's standard `xdg-shell` path, which layer-shell surfaces
+  bypass; reaching it would mean dropping to raw GDK/Wayland calls beneath
+  the library itself. A synthetic click-replay fallback (dismiss, then
+  inject a matching click at the same screen position) was also spiked and
+  rejected: `ydotool`'s absolute positioning on this dev machine isn't a
+  direct pixel mapping (empirically verified `input × 2 + 1`, clamping
+  near screen edges — a property of this exact dual-monitor setup, not
+  portable), and would also need per-monitor offset lookups and an
+  external daemon dependency (`ydotoold`) just to fake one click. Even
+  Rofi — the most established launcher in this category — has open user
+  reports of the identical symptom with equivalent settings enabled
+  ([davatorium/rofi#885](https://github.com/davatorium/rofi/issues/885)),
+  suggesting this is a genuinely hard spot for this whole app category on
+  current Wayland compositors, not a Wield-specific gap. Owner decision:
+  accept the two-click reality for now; revisit only if Hyprland or
+  `gtk-layer-shell` fix their end.
 
 ## Converter tooling (M2)
 

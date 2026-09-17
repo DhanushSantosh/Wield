@@ -543,6 +543,31 @@
     }
   },
   {
+    "id": "keep.awake",
+    "title": "Keep awake",
+    "keywords": [
+      "awake",
+      "sleep",
+      "screensaver",
+      "caffeine",
+      "inhibit"
+    ],
+    "category": "Capture",
+    "args": [],
+    "requires": {
+      "Portal": {
+        "iface": "Inhibit",
+        "min_ver": 1
+      }
+    },
+    "output": "Report",
+    "capability": {
+      "Portal": {
+        "adapter": "inhibit.toggle"
+      }
+    }
+  },
+  {
     "id": "pdf.compress",
     "title": "Compress PDF",
     "keywords": [

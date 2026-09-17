@@ -23,7 +23,7 @@ repository = "https://github.com/DhanushSantosh/Wield"
 
 [workspace.dependencies]
 async-trait = "0.1"
-ashpd = { version = "0.13", default-features = false, features = ["tokio", "screenshot", "global_shortcuts"] }
+ashpd = { version = "0.13", default-features = false, features = ["tokio", "screenshot", "global_shortcuts", "inhibit"] }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 zbus_xml = "5"

@@ -4,6 +4,12 @@ use crate::state::AppState;
 use tokio_util::sync::CancellationToken;
 use wield_core::{ArgMap, ArgType, ArgValue, ExecutionRequest, ToolOutcome};
 
+/// Thin re-export so `tray.rs` doesn't need its own `wield_portal` import
+/// just for this one query.
+pub fn keep_awake_is_active() -> bool {
+    wield_portal::adapters::inhibit_toggle::is_active()
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ToolSummary {
     pub id: String,

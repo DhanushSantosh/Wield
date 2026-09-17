@@ -787,6 +787,40 @@
     }
   },
   {
+    "id": "screen.ocr",
+    "title": "Extract text from screen",
+    "keywords": [
+      "ocr",
+      "text",
+      "extract",
+      "screenshot",
+      "recognize"
+    ],
+    "category": "Capture",
+    "args": [],
+    "requires": {
+      "All": [
+        {
+          "Portal": {
+            "iface": "Screenshot",
+            "min_ver": 2
+          }
+        },
+        {
+          "Binary": "tesseract"
+        }
+      ]
+    },
+    "output": {
+      "Value": "Text"
+    },
+    "capability": {
+      "Native": {
+        "id": "screen.ocr"
+      }
+    }
+  },
+  {
     "id": "video.convert",
     "title": "Convert video",
     "keywords": [

@@ -4642,6 +4642,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "wield-core",
+ "wield-native",
  "wield-portal",
  "wield-tools",
  "zbus",

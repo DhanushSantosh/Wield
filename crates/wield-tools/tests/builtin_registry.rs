@@ -338,6 +338,7 @@ fn registry_has_exactly_the_expected_builtins() {
             "pdf.compress",
             "pdf.merge",
             "pdf.split",
+            "screen.ocr",
             "video.convert"
         ]
     );

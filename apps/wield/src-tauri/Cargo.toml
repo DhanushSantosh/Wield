@@ -17,6 +17,7 @@ tauri-build = { version = "2.5.3", features = [] }
 wield-core = { path = "../../../crates/wield-core" }
 wield-tools = { path = "../../../crates/wield-tools" }
 wield-portal = { path = "../../../crates/wield-portal" }
+wield-native = { path = "../../../crates/wield-native" }
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.9.5", features = ["tray-icon"] }

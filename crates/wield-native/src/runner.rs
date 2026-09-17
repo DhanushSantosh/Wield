@@ -12,6 +12,7 @@ pub struct NativeToolRunner;
 impl NativeRunner for NativeToolRunner {
     async fn run(&self, id: &str, args: &ArgMap, cancel: CancellationToken) -> ToolOutcome {
         match id {
+            "screen.ocr" => crate::tools::screen_ocr::run(args, cancel).await,
             other => ToolOutcome::Failed {
                 stage: Stage::Native,
                 detail: format!("unknown native tool: {other}"),

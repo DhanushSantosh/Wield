@@ -33,6 +33,15 @@ pub async fn toggle(_args: &ArgMap, cancel: CancellationToken) -> ToolOutcome {
     toggle_with(&mut guard, start_inhibit(), cancel).await
 }
 
+/// Closes the held inhibit if one is active, without flipping anything on.
+/// Used only by the tray's Quit handler - `toggle()` always flips state,
+/// which would be wrong here if keep-awake happened to already be off.
+pub async fn close_if_active() {
+    if let Some(request) = held().lock().await.take() {
+        let _ = request.close().await;
+    }
+}
+
 /// The testable core: takes the held-state slot and the "start a new
 /// inhibit" future as parameters so tests can substitute a fake for the
 /// latter without touching the real portal or the shared static.
@@ -142,6 +151,17 @@ mod tests {
         // far, must report inactive - this is the only branch of
         // `is_active()` unit-testable without a real ashpd::Request (see
         // the plan's Global Constraints).
+        assert!(!is_active());
+    }
+
+    #[tokio::test]
+    async fn close_if_active_is_a_no_op_when_nothing_is_held() {
+        // Exercises the "nothing held" branch directly against the real
+        // static (safe: it's a no-op either way) - the "something held"
+        // branch has the same untestable-without-a-real-Request
+        // constraint as toggle_with's own off-path (see Global
+        // Constraints).
+        close_if_active().await;
         assert!(!is_active());
     }
 }

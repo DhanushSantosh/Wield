@@ -124,7 +124,21 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
             let _ = app.emit("tray://open-settings", ());
             crate::palette::show(app);
         }
-        "quit" => app.exit(0),
+        "quit" => {
+            if crate::commands::keep_awake_is_active() {
+                // Best-effort, and deliberately not awaited - this handler
+                // is sync and called from Tauri's menu-event callback, not
+                // an async context. A quit that's a beat slower than
+                // instant is a worse experience than one that's instant
+                // but can strand the inhibitor - spawn it and exit right
+                // after, giving the close call a moment to actually reach
+                // the portal before the process itself goes away.
+                tauri::async_runtime::spawn(async {
+                    wield_portal::adapters::inhibit_toggle::close_if_active().await;
+                });
+            }
+            app.exit(0);
+        }
         other => tracing::warn!(menu_id = other, "unhandled tray menu item"),
     }
 }

@@ -217,6 +217,19 @@ mod tests {
     }
 
     #[test]
+    fn refresh_tray_keep_awake_is_a_no_op_with_nothing_set() {
+        // `CheckMenuItem<tauri::Wry>` can't be constructed in any test
+        // environment (`tauri::test::mock_app()` only produces
+        // `CheckMenuItem<MockRuntime>`, a different type; a real `Wry` item
+        // needs an actual running Tauri app). This is the only branch of
+        // `refresh_tray_keep_awake` unit-testable in isolation - the
+        // `Some(item)` branch is verified live instead (Task 6).
+        let state = empty_state();
+        state.refresh_tray_keep_awake(true);
+        state.refresh_tray_keep_awake(false);
+    }
+
+    #[test]
     fn cancel_run_toggles_a_registered_token() {
         let state = empty_state();
         let id = RunId::new();

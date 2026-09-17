@@ -154,6 +154,9 @@ pub async fn run_tool_impl(
         .await;
     let _ = forward.await;
     state.take_run(&run_id);
+    if id == "keep.awake" {
+        state.refresh_tray_keep_awake(wield_portal::adapters::inhibit_toggle::is_active());
+    }
     tracing::info!(
         tool_id = id,
         elapsed_ms = started.elapsed().as_millis() as u64,

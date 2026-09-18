@@ -7,24 +7,29 @@ for the milestone plan (M1–M5).
 
 ## Packaging
 
-- **Icon.** `assets/icon.png` is still the placeholder desk illustration
-  inherited from the pre-Wield DeskCrafter project. Replace before requesting
-  final Flathub approval. Full detail: `docs/packaging.md`'s "Known gaps".
-- **AppStream screenshots.** None published yet; add a `<screenshots>` block
-  after release-quality UI captures exist.
+- **Icon.** `assets/icon.png` (and its copy at
+  `apps/wield/src-tauri/icons/icon.png`, now also read directly by the
+  AppImage build) is still the placeholder desk illustration inherited from
+  the pre-Wield DeskCrafter project. Replace before any real,
+  publicly-announced release. Full detail: `docs/packaging.md`'s "Known
+  gaps".
+- **AppStream screenshots.** None published yet; moot while AppImage is the
+  only channel (AppStream metadata was a Flatpak/Flathub requirement) —
+  revisit only if a metadata-consuming channel is added later.
 - **Bundled converter binaries.** ImageMagick, pandoc, qpdf, Ghostscript,
-  Tesseract+`eng`, `libreoffice-fresh`, and the `ffmpeg-full` runtime extension
-  are not bundled in
-  the Flatpak — `color.pick` works there, everything `Command`-backed
-  (`image.convert`, and M2's `video.convert`/`audio.extract`/
-  `document.convert`/`pdf.tools` as they land) reports `Unavailable` inside
-  the Flatpak specifically, while working fully on native installs via
-  `$PATH`. Each binary needs real from-scratch Flatpak build-module research
-  (checked `flathub/shared-modules` during P7 — nothing ready-made exists for
-  any of these). Re-scoped, not forgotten: explicitly deferred again when
-  starting M2 (2026-09-14, owner decision) — Flathub submission itself is on
-  hold, so bundling for a Flatpak that isn't being submitted yet is
-  low-urgency.
+  Tesseract+`eng`, and `libreoffice` are not bundled into the AppImage —
+  `color.pick` works there, everything `Command`-backed (`image.convert`,
+  and M2's `video.convert`/`audio.extract`/`document.convert`/`pdf.tools`)
+  reports `Unavailable` inside it, while working fully on native installs
+  via `$PATH`. `linuxdeploy`'s dependency tracing (confirmed live,
+  2026-09-17) auto-bundles *linked* `.so` dependencies like
+  `gtk-layer-shell`, but these converters are spawned as subprocesses via
+  the `Command` capability, not linked libraries, so nothing bundles them
+  automatically — real, separate work (dropping prebuilt/static binaries
+  into the AppImage's `AppDir` + `PATH` wiring in `AppRun`), genuinely
+  simpler than Flatpak's from-scratch sandboxed-module-build requirement
+  but not automatic. Explicitly deferred as follow-up when the Flatpak → 
+  AppImage packaging switch was scoped (2026-09-17, owner decision).
 - **`document.convert` can't read legacy binary Office formats
   (`.doc`/`.ppt`/`.xls`).** `pandoc` has no reader for them at all
   (confirmed via `pandoc --list-input-formats` - only the modern XML-based
@@ -33,22 +38,21 @@ for the milestone plan (M1–M5).
   the requested output format - real added complexity, deliberately
   deferred rather than built into M2c's first version. `libreoffice`
   itself can read these formats fine; only the routing logic is missing.
-- **`gtk-layer-shell` Flatpak build module — missing, will break the next
-  release tag.** `layer_shell.rs` links the system `gtk-layer-shell` library;
-  `ci.yml`'s ubuntu-latest runners install it directly, but
-  `org.gnome.Platform`/`Sdk` don't bundle it. The next `release.yml` tag
-  build will fail the same way CI initially did until a build module (source
-  tarball + meson/ninja) is added to the manifest. More time-sensitive than
-  the other packaging gaps here - the next tag push hits this, not just
-  Flathub review.
+- **`gtk-layer-shell` Flatpak build module — resolved by dropping Flatpak
+  entirely.** Was tracked here as a real, time-sensitive blocker (no
+  build module existed in `flathub/shared-modules`, and `org.gnome.Sdk`
+  doesn't bundle the library). Moot as of 2026-09-17: the owner replaced
+  Flatpak with AppImage as the sole packaging channel specifically because
+  `linuxdeploy`'s dependency tracing bundles linked `.so`s like
+  `gtk-layer-shell` automatically — confirmed live, the AppImage build
+  succeeded with no manual module work needed. `packaging/flatpak/` has
+  been deleted; see `docs/packaging.md`.
 - **Secondary channels** (AUR, `.deb`, `.rpm`) deferred to a later packaging
-  plan; only Flatpak is being pursued for `1.0`.
-- **Flathub submission on hold.** PR
-  [flathub/flathub#10176](https://github.com/flathub/flathub/pull/10176) was
-  auto-closed by Flathub's own bot — their checklist requires confirming no
-  AI tool opened the PR, which isn't true here. Owner decision: hold the
-  whole submission until MVP is further along; fork + branch left in place,
-  untouched, for whenever the owner wants to submit it personally.
+  plan; only AppImage is being pursued for `1.0`. Flathub submission (was
+  on hold pending MVP progress — PR
+  [flathub/flathub#10176](https://github.com/flathub/flathub/pull/10176))
+  is superseded, not just paused: Flatpak itself is no longer the intended
+  distribution format.
 
 ## Platform coverage
 

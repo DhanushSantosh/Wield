@@ -981,3 +981,72 @@ The live baseline was `Inhibit` portal v3 via `xdg-desktop-portal-hyprland`.
 A hard crash or `kill -9` while active was not tested (would have genuinely
 left the dev machine's idle-inhibit stuck) — this is the accepted,
 documented gap from the design phase, not a new one found here.
+
+## AppImage packaging switch
+
+Validated via real, live GitHub Actions runs against a throwaway tag
+(`v0.0.1-test` through `v0.0.4-test`, each deleted afterward along with any
+release created for it — no test artifacts left behind), not by reasoning
+about the pipeline on paper. Full design/rationale:
+`docs/packaging.md`; backlog impact: `docs/backlog.md`'s "Packaging"
+section.
+
+**The researched risk did not materialize; two unrelated, real bugs did.**
+The plan's anticipated risk going in was
+[tauri-apps/tauri#14796](https://github.com/tauri-apps/tauri/issues/14796),
+an open report of `linuxdeploy` failing in GitHub Actions CI. It never hit:
+once the icon bug below was fixed, the AppImage bundle step itself
+(`linuxdeploy` + the AppImage plugin, both downloaded fresh by Tauri's
+bundler) completed cleanly on `ubuntu-22.04` in this repo's CI, confirmed by
+the log line `Finished 1 bundle at: …/Wield_0.1.0_amd64.AppImage`. This also
+confirms `gtk-layer-shell` — a real linked `.so` dependency of the
+`wield-app` binary — gets bundled automatically via `linuxdeploy`'s
+dependency tracing, with no manual build-module work required (the thing
+that was genuinely blocking Flatpak).
+
+**Bug 1 — non-square icon panicked the bundler.** First run failed with exit
+134 (SIGABRT): `crates/tauri-bundler/src/bundle/linux/appimage/
+linuxdeploy.rs:101` panicking with `"couldn't find a square icon to use as
+AppImage icon"`. Root cause: `apps/wield/src-tauri/icons/icon.png` was
+815×813 — two pixels off square. Fixed by force-resizing to a true 512×512
+(`convert icon.png -resize 512x512\! icon.png` — the `!` flag is required;
+a plain `-resize 512x512` preserves aspect ratio and produces 512×511,
+still not square).
+
+**Bug 2 — `tauri-action` can't create the release, even with
+`contents: write` confirmed granted.** Second run: the bundle succeeded
+completely, but `tauri-action`'s own release-creation step failed with
+`Resource not accessible by integration`. Root-caused via `gh api
+repos/DhanushSantosh/Wield/actions/permissions/workflow`, which showed the
+repo's default `GITHUB_TOKEN` permissions are read-only — fixed by adding
+`permissions: contents: write` to the job. That did **not** fully resolve
+it: a third run, with the permissions block confirmed active (the runner's
+own "Set up job" log showed `Contents: write` granted), hit the identical
+error at the identical call. Five further live diagnostic runs (throwaway
+`diag-*` tags, a separate scratch workflow, all deleted afterward) isolated
+it as far as it could be isolated:
+- A raw `gh api …/releases` POST with the exact same parameters
+  `tauri-action` uses (owner/repo/tag/body/draft/prerelease/
+  `target_commitish`/`generate_release_notes`) succeeded every time, using
+  the same `GITHUB_TOKEN`, same repo, same tag, same commit.
+- A direct call through the exact `@actions/github@9.1.1`
+  `getOctokit().rest.repos.createRelease` client `tauri-action` itself
+  bundles also succeeded — confirmed against `tauri-action`'s real,
+  currently-resolved `dist/index.js` byte content (not just its `src/`),
+  ruling out stale-bundle drift as the explanation too.
+- Given every isolated re-check of the identical operation succeeded, the
+  root cause sits somewhere inside `tauri-action`'s own runtime that
+  further isolation couldn't reach without diminishing returns. **Worked
+  around, not root-caused to completion:** `tauri-action` now runs
+  build-only (no `tagName`/`releaseName`/`releaseBody`/`releaseDraft`
+  inputs, so it never calls the Releases API at all — confirmed via its
+  `src/index.ts`, `tagName` unset skips `getOrCreateRelease` entirely), and
+  a new step finds the built `.AppImage` and runs `gh release create …
+  --draft` directly — the exact call already proven reliable above.
+
+**Final, fourth run confirmed the fix end-to-end:** a genuine draft release
+was created (`isDraft: true`), with `Wield_0.1.0_amd64.AppImage` attached
+(85.6 MB, `content-type: application/vnd.appimage`). Downloaded and
+`file`-checked: `ELF 64-bit LSB pie executable, x86-64, … static-pie linked,
+stripped` — a real, correctly-formed AppImage, not just a successful HTTP
+response.

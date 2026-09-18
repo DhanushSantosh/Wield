@@ -28,7 +28,7 @@
 **Interfaces:**
 - Produces: a valid `bundle.targets: ["appimage"]` + `bundle.icon` config, consumed by Task 4's live build.
 
-- [ ] **Step 1: Make the config change**
+- [x] **Step 1: Make the config change**
 
 In `apps/wield/src-tauri/tauri.conf.json`, find:
 
@@ -57,7 +57,7 @@ Replace with:
 
 (`icons/icon.png` already exists at `apps/wield/src-tauri/icons/icon.png` — it's the placeholder icon already tracked in `docs/backlog.md`, not something to replace as part of this plan.)
 
-- [ ] **Step 2: Validate the config parses correctly**
+- [x] **Step 2: Validate the config parses correctly**
 
 Run, from the repo root:
 
@@ -67,7 +67,7 @@ python3 -c "import json; json.load(open('apps/wield/src-tauri/tauri.conf.json'))
 
 Expected: no output, exit code 0 (valid JSON). This is a cheap sanity check only — it does not confirm the bundler itself works; that's Task 4's job, deliberately, per this plan's Global Constraints.
 
-- [ ] **Step 3: Confirm the Tauri CLI recognizes the new target**
+- [x] **Step 3: Confirm the Tauri CLI recognizes the new target**
 
 Run:
 
@@ -77,7 +77,7 @@ npx --prefix apps/wield tauri build --help 2>&1 | grep -A3 "bundles"
 
 Expected: help text listing `appimage` among the recognized bundle identifiers (confirms the installed `@tauri-apps/cli` version understands the target name — a real, if small, thing that could be wrong if the CLI version were old).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/wield/src-tauri/tauri.conf.json
@@ -98,13 +98,13 @@ git commit -m "tauri: turn on the appimage bundler target"
 
 **Interfaces:** none — pure removal, nothing downstream depends on these files once Task 3 removes their only consumer (the `flatpak` job in `release.yml`).
 
-- [ ] **Step 1: Remove the directory**
+- [x] **Step 1: Remove the directory**
 
 ```bash
 git rm -r packaging/flatpak
 ```
 
-- [ ] **Step 2: Confirm nothing else references these files**
+- [x] **Step 2: Confirm nothing else references these files**
 
 ```bash
 grep -rn "packaging/flatpak" --include="*.yml" --include="*.md" --include="*.json" . 2>/dev/null
@@ -112,7 +112,7 @@ grep -rn "packaging/flatpak" --include="*.yml" --include="*.md" --include="*.jso
 
 Expected: no matches outside of `docs/packaging.md` and `docs/backlog.md` (both are documentation, updated in Task 3 and Task 5 respectively — not a reason to stop here, just confirms nothing *executable* still points at the removed directory).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -m "packaging: remove the Flatpak manifest and its assets"
@@ -130,7 +130,7 @@ git commit -m "packaging: remove the Flatpak manifest and its assets"
 - Consumes: Task 1's `bundle.targets: ["appimage"]` config.
 - Produces: the actual CI pipeline Task 4 validates live.
 
-- [ ] **Step 1: Rewrite the workflow**
+- [x] **Step 1: Rewrite the workflow**
 
 Replace the entire contents of `.github/workflows/release.yml` with:
 
@@ -192,7 +192,7 @@ jobs:
 
 This is spec §3.1 verbatim — pinned to `ubuntu-22.04` (not `ubuntu-latest`), the same apt dependency list `ci.yml` already proves works on this exact runner image, `projectPath: apps/wield` (confirmed live: `apps/wield/package.json` and `apps/wield/src-tauri/` both exist, matching `tauri-action`'s documented "root of the project... containing package.json, src-tauri/" contract), `releaseDraft: true` per the Global Constraints.
 
-- [ ] **Step 2: Rewrite `docs/packaging.md`**
+- [x] **Step 2: Rewrite `docs/packaging.md`**
 
 Replace the entire contents of `docs/packaging.md` with:
 
@@ -242,7 +242,7 @@ Replace the entire contents of `docs/packaging.md` with:
   attempted by this pipeline.
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/release.yml docs/packaging.md
@@ -263,7 +263,7 @@ This is the task the whole plan exists to get right — per the Global
 Constraints, the open `linuxdeploy`-in-CI issue is real and must be
 checked against an actual run, not assumed away.
 
-- [ ] **Step 1: Push the branch and a throwaway tag**
+- [x] **Step 1: Push the branch and a throwaway tag**
 
 ```bash
 git push -u origin feat/appimage-packaging
@@ -275,7 +275,7 @@ git push origin v0.0.1-test
 from — the workflow's trigger is `push: tags: - "v*"`, not scoped to any
 particular branch.)
 
-- [ ] **Step 2: Watch the actual run**
+- [x] **Step 2: Watch the actual run**
 
 ```bash
 gh run list --workflow=release.yml --limit 1
@@ -300,7 +300,7 @@ not guess. Two realistic failure shapes:
   live — a documented-but-unverified fallback is not suffient given this
   plan's whole purpose is confirming the pipeline actually works.
 
-- [ ] **Step 3: Confirm the draft release and its artifact**
+- [x] **Step 3: Confirm the draft release and its artifact**
 
 ```bash
 gh release view v0.0.1-test --json isDraft,assets
@@ -316,7 +316,7 @@ file /tmp/appimage-check/*.AppImage
 
 Expected: `file` reports something like `ELF 64-bit LSB executable... (statically linked)` — not a truncated or zero-byte file. If a spare machine or VM is reasonably available, actually running it (`chmod +x`, then execute) and confirming the palette appears is a stronger check than `file` alone, but `file`'s confirmation plus a non-trivial size (tens of MB, not a few KB) is the minimum bar.
 
-- [ ] **Step 4: Clean up the throwaway tag and release**
+- [x] **Step 4: Clean up the throwaway tag and release**
 
 ```bash
 gh release delete v0.0.1-test --yes --cleanup-tag
@@ -331,7 +331,7 @@ cleanup step if `--cleanup-tag` didn't cover it for some reason — don't
 skip verifying the tag is actually gone from `git ls-remote --tags origin`
 before moving on.)
 
-- [ ] **Step 5: No commit for this task**
+- [x] **Step 5: No commit for this task**
 
 Nothing changed in the tree — Task 4 is pure validation. If Step 2's
 fallback path was needed, that fallback's code change was already
@@ -348,7 +348,7 @@ the common case where `tauri-action` just worked.
 
 **Interfaces:** none — documentation only.
 
-- [ ] **Step 1: Update the stale `gtk-layer-shell` Flatpak entry in `docs/backlog.md`**
+- [x] **Step 1: Update the stale `gtk-layer-shell` Flatpak entry in `docs/backlog.md`**
 
 Find the existing entry (under `## Packaging`):
 
@@ -387,7 +387,7 @@ bundled in the Flatpak" to "are not bundled in the AppImage" and adjust the
 rest of its prose (which tool reports `Unavailable` where) accordingly —
 same underlying gap, different package format.
 
-- [ ] **Step 2: Add a `docs/testing.md` section**
+- [x] **Step 2: Add a `docs/testing.md` section**
 
 Read the file's existing structure first (tail of the file, matching the
 established per-milestone section style) and add a new section following
@@ -398,7 +398,7 @@ from Task 4 (link or run ID if convenient, the actual result), whether
 this once Task 4 is actually complete — it documents what really happened,
 not a prediction.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/backlog.md docs/testing.md

@@ -52,11 +52,35 @@ for the milestone plan (M1–M5).
 
 ## Platform coverage
 
-- **KDE/Sway/GNOME(no-layer-shell fallback)/X11 not tested.** All Wayland
-  layer-shell work (palette positioning, the full-screen click-dismiss
-  backdrop) has only been live-verified on Hyprland. The GNOME/X11 fallback
-  path (`layer_shell::is_available() == false`) is code-reviewed and unit-
-  gated but not live-tested on an actual GNOME or X11 session.
+- **KDE/Sway/X11 not tested; GNOME partially tested, real findings, one
+  question still open.** All Wayland layer-shell work (palette positioning,
+  the full-screen click-dismiss backdrop) has only been live-verified on
+  Hyprland. GNOME's fallback path (`layer_shell::is_available() == false`)
+  got a real, if incomplete, live pass (2026-09-17) via a nested GNOME 50.4
+  session (`gnome-shell --devkit --wayland --virtual-monitor`, GNOME's
+  replacement for the old `--nested` flag - `mutter-devkit` was also
+  installed, since `--devkit` alone runs the compositor headless with no
+  viewer). Confirmed for real: `layer_shell::is_available()` correctly
+  detects the absence of `wlr-layer-shell` and logs the expected fallback
+  message. Confirmed **architecturally, not just by testing** - true
+  regardless of how much further live-testing happens - that
+  click-outside-to-dismiss cannot work on GNOME as currently built: the
+  fallback is a small fixed-size centered window (`tauri.conf.json`), not
+  the full-screen transparent surface layer-shell gives Hyprland, so there
+  is no Wield-controlled area outside the card to ever catch an "outside"
+  click; Escape and the tray are the only ways out there, same shape as the
+  already-accepted cross-monitor dismiss gap below. **Left genuinely open**:
+  whether the palette reliably shows and receives keyboard input at all
+  under GNOME. One live attempt showed a real, visible, correctly-positioned
+  window; two immediate retries in fresh sessions showed nothing at all, no
+  error anywhere, D-Bus calls all reporting success - cross-checked with two
+  independent screenshot tools to rule out a capture artifact. Read as the
+  nested-`--devkit`-testing rig itself being fragile (a very new GNOME 50.4
+  feature, `dbus-run-session` + a virtual monitor + the devkit viewer
+  stacked together) rather than a finding about Wield on a real GNOME
+  session - not treated as a confirmed bug either way. Revisit with a real
+  (non-nested) GNOME session if GNOME support becomes an actual priority,
+  not more nested-devkit testing.
 - **Cross-monitor click-away-to-dismiss doesn't work.** Clicking a
   genuinely different, unfocused monitor while the palette is shown does not
   dismiss it - a real, confirmed Hyprland bug

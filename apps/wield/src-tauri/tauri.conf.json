@@ -29,7 +29,8 @@
   },
   "bundle": {
     "active": true,
-    "targets": [],
+    "targets": ["appimage"],
+    "icon": ["icons/icon.png"],
     "category": "Utility",
     "shortDescription": "Portal-native Linux utility hub",
     "longDescription": "A command palette and tray for quick Linux actions and file conversions."

@@ -1,0 +1,23 @@
+name: Feature request
+description: Propose a user-facing improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What task is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed behavior
+      description: Include alternatives or tradeoffs if known.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Platforms and dependencies
+      description: Note Linux/desktop requirements and any external binaries.

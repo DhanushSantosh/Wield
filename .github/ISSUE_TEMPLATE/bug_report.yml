@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible Wield problem
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Include expected and actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open Wield\n2. ..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Wield version or commit
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Distribution, desktop session, and install method
+      placeholder: "Ubuntu 22.04, Wayland/GNOME, AppImage"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Remove private paths, tokens, and personal information first.

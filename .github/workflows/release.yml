@@ -5,57 +5,118 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  appimage:
+  build:
     runs-on: ubuntu-22.04
-    permissions:
-      contents: write
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Check tag points to the correct release branch
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          release_branch="$(node scripts/release-check.mjs branch "$RELEASE_TAG")"
+          git fetch origin "$release_branch"
+          test "$(git cat-file -t "$RELEASE_TAG")" = tag
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$GITHUB_SHA" "origin/$release_branch"
 
       - name: Install Tauri Linux build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libgtk-layer-shell-dev
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev \
+            librsvg2-dev libgtk-layer-shell-dev \
+            libgdk-pixbuf-2.0-dev gdk-pixbuf2.0-bin xdg-utils
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install Node
-        uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         with:
-          node-version: 20
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
           cache: npm
-
-      - run: npm ci
-
-      - name: Build the AppImage
-        uses: tauri-apps/tauri-action@v1
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
-          projectPath: apps/wield
-          args: --bundles appimage
+          tool: cargo-audit@0.22.2
 
-      - name: Create draft release and attach the AppImage
+      - name: Run the same gate used locally
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: bash scripts/release-gate.sh "$RELEASE_TAG"
+
+      - name: Check the gate left tracked files untouched
         run: |
           set -euo pipefail
-          appimage=$(find target/release/bundle/appimage -name '*.AppImage')
-          gh release create "${{ github.ref_name }}" \
-            --title "Wield ${{ github.ref_name }}" \
-            --notes "See the AppImage below to download and run this version." \
-            --draft \
-            "$appimage"
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+            git status --porcelain --untracked-files=no >&2
+            echo "The release gate modified tracked files (e.g. a lockfile); the tagged source is not what was built." >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-bundle
+          path: |
+            target/release/bundle/appimage/*.AppImage
+            target/release/bundle/appimage/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+
+  draft:
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-bundle
+          path: release-bundle
+
+      - name: Verify transferred artifacts and create review draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          node scripts/release-check.mjs manifest "$RELEASE_TAG"
+          (cd release-bundle && sha256sum --check SHA256SUMS)
+          node scripts/release-check.mjs artifact "$RELEASE_TAG" release-bundle
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release already exists; refusing to overwrite assets" >&2
+            exit 1
+          fi
+          channel=$(node scripts/release-check.mjs manifest "$RELEASE_TAG" | cut -d' ' -f1)
+          args=(--verify-tag --draft --title "Wield $RELEASE_TAG" \
+            --notes "Review the AppImage, SHA256SUMS, release notes, converter prerequisites and smoke-test evidence before publishing.")
+          if [ "$channel" = beta ]; then
+            args+=(--prerelease --latest=false)
+          else
+            args+=(--latest=false)
+          fi
+          gh release create "$RELEASE_TAG" "${args[@]}" release-bundle/*.AppImage release-bundle/SHA256SUMS
+          mkdir -p downloaded
+          gh release download "$RELEASE_TAG" --dir downloaded
+          (cd downloaded && sha256sum --check SHA256SUMS)

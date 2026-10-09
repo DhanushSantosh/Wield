@@ -194,6 +194,20 @@ for the milestone plan (M1–M5).
   scope (two new wield-core mechanisms) from also absorbing a third,
   unrelated addition.
 
+## Dependencies
+
+- **Unmaintained GTK3 Rust stack.** `cargo audit` (2026-10-09, 511 crates)
+  reports zero vulnerabilities but 9 warnings: the `gtk-layer-shell` /
+  `gtk-layer-shell-sys` bindings Wield links directly are flagged
+  unmaintained, along with `proc-macro-error` and the `unic-*` crates, and
+  `glib` 0.18 has an unsoundness advisory (RUSTSEC-2024-0429). All come from
+  the gtk-rs GTK3 bindings that Tauri 2 itself uses on Linux, so there is no
+  local fix. Revisit when Tauri moves to GTK4 or a maintained layer-shell
+  binding exists. Warnings don't fail the release gate; vulnerabilities do.
+- **Release artifacts are unsigned.** No GitHub artifact attestation or
+  signature yet; `SHA256SUMS` only proves integrity against the same release
+  page. Deferred follow-up, see `docs/releasing.md`.
+
 ## Misc
 
 - **LICENSE still says "Copyright (c) 2025".** Inherited from the original

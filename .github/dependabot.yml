@@ -1,0 +1,40 @@
+version: 2
+updates:
+  # Workflows pin actions to commit SHAs; this keeps those pins moving.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      cargo-minor-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+
+  # Keeps the release.Dockerfile's pinned ubuntu:22.04 digest current.
+  # Its Node version + checksum are pinned by hand and are not covered here.
+  - package-ecosystem: docker
+    directory: /.github
+    schedule:
+      interval: weekly
+    ignore:
+      # The AppImage's glibc floor depends on staying on 22.04; allow digest refreshes only.
+      - dependency-name: ubuntu
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

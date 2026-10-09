@@ -1,16 +1,24 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   push:
   pull_request:
-    branches: [master]
+    branches: [master, release]
   workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Tauri Linux build dependencies
         run: |
@@ -28,20 +36,28 @@ jobs:
             libgtk-layer-shell-dev
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         with:
           components: rustfmt, clippy
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
       - name: Install Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cargo-audit@0.22.2
+
       - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: cargo audit
+      - run: node --test scripts/release-check.test.mjs
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       # --test-threads=1: cargo test --workspace's biggest test binary
@@ -55,13 +71,14 @@ jobs:
       # logic bug in the code under test. Serializing removes the
       # concurrent-spawn pressure that triggers it; the whole suite still
       # runs in well under a second either way.
-      - run: cargo test --workspace -- --test-threads=1
+      - run: cargo test --workspace --locked -- --test-threads=1
       - run: npm run check
 
   e2e-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Tauri Linux build dependencies + E2E prerequisites
         run: |
@@ -82,10 +99,10 @@ jobs:
             imagemagick
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
       - name: Run E2E smoke under a virtual display + fresh D-Bus session
         run: |
